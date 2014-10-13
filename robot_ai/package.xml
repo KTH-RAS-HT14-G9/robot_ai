@@ -1,0 +1,30 @@
+<package>
+  <name>robot_ai</name>
+  <version>0.1.0</version>
+  <description>
+    Packages for group 9s robot AI of the RAS 2014 course.
+  </description>
+  <license>BSD</license>
+
+  <url>https://github.com/KTH-RAS-HT14-G9/robot_ai</url>
+
+  <author email="tobias2@kth.se">Tobias Andersson</author>
+  <author email="mmlosch@kth.se">Max Losch</author>
+  <author email="dimm@kth.se">Diego Martinez Marrodan</author>
+  <author email="tiagos@kth.se">Tiago Sebastiao</author>
+  <author email="lanwang@kth.se">Lan Wang</author>
+
+  <maintainer email="tobias2@kth.se">Tobias Andersson</maintainer>
+  <maintainer email="mmlosch@kth.se">Max Losch</maintainer>
+  <maintainer email="dimm@kth.se">Diego Martinez Marrodan</maintainer>
+  <maintainer email="tiagos@kth.se">Tiago Sebastiao</maintainer>
+  <maintainer email="lanwang@kth.se">Lan Wang</maintainer>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <run_depend>std_msgs</run_depend>
+
+  <export>
+    <metapackage/>
+  </export>
+</package>
