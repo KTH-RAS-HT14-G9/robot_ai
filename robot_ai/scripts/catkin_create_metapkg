@@ -1,0 +1,40 @@
+#!/bin/sh
+
+if [ "$#" -ne "1" ]; then
+	echo 'catkin_create_metapkg: error: Package name required.'
+	exit 1
+fi
+
+#mkdir "./$1"
+catkin_create_pkg "$1"
+
+if [ "$?" -ne "0" ]; then
+	echo 'catkin_create_metapkg: error: Abort.'
+	exit $?
+fi
+
+cd "./$1"
+
+rm -r *
+
+#create CMakeLists.txt
+echo "cmake_minimum_required(VERSION 2.8.3)" > ./CMakeLists.txt
+echo "project($1)" >> ./CMakeLists.txt
+echo "find_package(catkin REQUIRED)" >> ./CMakeLists.txt
+echo "catkin_metapackage()" >> ./CMakeLists.txt
+
+#create package.xml
+echo "<package>" > ./package.xml
+echo "  <name>$1</name>" >> ./package.xml
+echo "  <version>0.1.0</version>" >> ./package.xml
+echo "  <description>The $1 metapackage</description>" >> ./package.xml
+echo "  <maintainer email=\"ras@todo.todo\">ras</maintainer>" >> ./package.xml
+echo "  <license>TODO</license>" >> ./package.xml
+echo "  <buildtool_depend>catkin</buildtool_depend>" >> ./package.xml
+echo "  <export>" >> ./package.xml
+echo "    <metapackage/>" >> ./package.xml
+echo "  </export>" >> ./package.xml
+echo "</package>" >> ./package.xml
+
+
+exit 0

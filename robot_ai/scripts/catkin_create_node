@@ -1,0 +1,40 @@
+#!/bin/sh
+
+if [ "$#" -lt "2" ]; then
+	echo 'Usage: catkin_create_node name pkg [dependencies [dependencies ...]]'
+	echo 'catkin_create_node: error: too few arguments'
+	exit 1
+fi
+
+#find path to package
+pkgpath=$(rospack find $2)
+
+if [ "$?" -ne "0" ]; then
+	echo "catkin_create_node: error: Package $2 could not be found."
+	echo "Note: Metapackages cannot contain nodes."
+	exit 1
+fi
+
+#change working directory to package
+cd $pkgpath
+
+if [ ! -d "./src" ]; then
+	mkdir "./src"
+elif [ -f src/$1.cpp ]; then
+	echo "catkin_create_node: error: Node with name $1 already exists."
+	exit 1
+fi
+
+#copy template src file
+SCRIPTDIR="$( cd "$( dirname "$0" )" && pwd )"
+cp "$SCRIPTDIR/node.cpp.template" src/$1.cpp
+
+#exchange node_name with given value
+sed -i s/node_name/$1/g src/$1.cpp
+
+python $SCRIPTDIR/CMakeListsInsert.py "$(pwd)/CMakeLists.txt" "$@"
+
+if [ "$?" -ne "0" ]; then
+	echo "catkin_create_node: error: Failed to write to CMakeLists.txt."
+	exit 1
+fi
