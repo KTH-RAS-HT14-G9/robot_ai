@@ -1,3 +1,6 @@
+# Ignore nested git repositories
+.git
+
 # Compiled Object files
 *.slo
 *.lo
