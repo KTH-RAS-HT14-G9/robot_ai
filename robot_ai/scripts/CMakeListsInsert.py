@@ -69,8 +69,8 @@ p = re.compile('^#?\\s*add_executable\(');
 insertAfterFirstOccurrence(f, p, "add_executable("+node+" src/"+node+".cpp)");
 
 # add dependencies...
-p = re.compile('^#?\\s*add_dependencies\(');
-insertAfterFirstOccurrence(f, p, "add_dependencies("+node+" "+pkg+"_generate_messages_cpp)");
+#p = re.compile('^#?\\s*add_dependencies\(');
+#insertAfterFirstOccurrence(f, p, "add_dependencies("+node+" "+pkg+"_generate_messages_cpp)");
 
 #add target_link_libraries...
 p = re.compile('^#?\\s*target_link_libraries\(');
