@@ -22,10 +22,11 @@ turn_pub = None
 follow_wall_pub = None
 go_forward_pub = None
 turn_done = False
-object_recognized = False
+recognizing_done = False
 object_detected = False
 object_location = None
 following_wall = False
+stopping_done = False
 
 
 ######################## STATES #########################
@@ -33,19 +34,35 @@ following_wall = False
 # define state GoForward
 class GoForward(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['go_forward', 'obstacle_detected', 'object_detected'])
+        smach.State.__init__(self, outcomes=['go_forward', 'stopping'])
 
     def execute(self, userdata):
         rospy.loginfo('Executing state GO_FORWARD')
         rospy.sleep(2.0)
         if ObstacleAhead():
             StopFollowWall()
+            return 'stopping'
+        else:
+            FollowWall()
+            return 'go_forward'
+
+# define state Stopping
+class Stopping(smach.State):
+    def __init__(self):
+        smach.State.__init__(self, outcomes=['stopping', 'obstacle_detected', 'object_detected'])
+
+    def execute(self, userdata):
+        global stopping_done
+        rospy.loginfo('Executing state STOPPING')
+        rospy.sleep(2.0)
+        if stopping_done:
+            stopping_done = False
             if object_detected:
                 return 'object_detected'
             else:
                 return 'obstacle_detected'
-        FollowWall()
-        return 'go_forward'
+        else:
+            return 'stopping'
 
 # define state ObstacleDetected
 class ObstacleDetected(smach.State):
@@ -95,11 +112,11 @@ class RecognizingObject(smach.State):
         smach.State.__init__(self, outcomes=['recognizing','obstacle_detected'])
 
     def execute(self, userdata):
-        global object_recognized, object_detected
+        global recognizing_done, object_detected
         rospy.loginfo('Executing state Recognizing')
         rospy.sleep(2.0)
-        if object_recognized:
-            object_recognized = False
+        if recognizing_done:
+            recognizing_done = False
             object_detected = False
             return 'obstacle_detected'       
         else:
@@ -108,13 +125,13 @@ class RecognizingObject(smach.State):
 ######################## FUNCTIONS #########################
 
 def CanTurnLeft():
-    return True if fl_side > 20 and bl_side > 20 else False
+    return True if fl_side > 0.20 and bl_side > 0.20 else False
 
 def CanTurnRight():
-    return True if fr_side > 20 and br_side > 20 else False
+    return True if fr_side > 0.20 and br_side > 0.20 else False
 
 def ObstacleAhead():
-    return True if l_front < 15 and r_front < 15 else False
+    return True if l_front < 0.15 and r_front < 0.15 else False
 
 def TurnLeft():
     turn_pub.publish(90.0)
@@ -153,9 +170,14 @@ def TurnDoneCallback(data):
     turn_done = data
     rospy.loginfo("Turn done callback: %s", str(data))
 
+def StoppingDoneCallback(data):
+    global stopping_done
+    stopping_done = data
+    rospy.loginfo("Stopping done callback: %s", str(data))
+
 def ObjectRecognizedCallback(data):
-    global object_recognized
-    object_recognized = data
+    global recognizing_done
+    recognizing_done = data
     rospy.loginfo("Object Recognized: %s", str(data))
 
 def ObjectDetectedCallback(data):
@@ -182,8 +204,9 @@ def main():
     sm = smach.StateMachine(outcomes=['error'])
     rospy.Subscriber("/robot_ai/distance", Distance, IRCallback)
     rospy.Subscriber("/controller/turn/done", Bool, TurnDoneCallback)
-    rospy.Subscriber("/vision/object_recognized", String, ObjectRecognizedCallback) # type?
+    rospy.Subscriber("/vision/recognizing_done", String, ObjectRecognizedCallback) # type?
     rospy.Subscriber("/vision/object_detected", String, ObjectDetectedCallback) # type?
+    rospy.Subscriber("/controller/forward/stopped", Bool, StoppingDoneCallback)
 
     turn_pub = rospy.Publisher("/controller/turn/angle", Float64, queue_size=1)
     follow_wall_pub = rospy.Publisher("/controller/follow_wall/activate", Bool, queue_size=1)
@@ -193,6 +216,9 @@ def main():
     with sm:
         smach.StateMachine.add('GO_FORWARD', GoForward(), 
                                transitions={'go_forward':'GO_FORWARD',
+                               'stopping':'STOPPING'})
+        smach.StateMachine.add('STOPPING', Stopping(), 
+                               transitions={'stopping':'STOPPING',
                                'obstacle_detected':'OBSTACLE_DETECTED',
                                'object_detected':'OBJECT_DETECTED'})
         smach.StateMachine.add('OBSTACLE_DETECTED', ObstacleDetected(), 
