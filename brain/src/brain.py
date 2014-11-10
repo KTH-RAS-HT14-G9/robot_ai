@@ -20,8 +20,13 @@ r_front = 0
 recognize_object_pub = None
 turn_pub = None
 follow_wall_pub = None
+go_forward_pub = None
 turn_done = False
 object_recognized = False
+object_detected = False
+object_location = None
+following_wall = False
+
 
 ######################## STATES #########################
 
@@ -32,9 +37,14 @@ class GoForward(smach.State):
 
     def execute(self, userdata):
         rospy.loginfo('Executing state GO_FORWARD')
-        
+        rospy.sleep(2.0)
         if ObstacleAhead():
-            return 'obstacle_detected'
+            StopFollowWall()
+            if object_detected:
+                return 'object_detected'
+            else:
+                return 'obstacle_detected'
+        FollowWall()
         return 'go_forward'
 
 # define state ObstacleDetected
@@ -44,6 +54,7 @@ class ObstacleDetected(smach.State):
 
     def execute(self, userdata):
         rospy.loginfo('Executing state ObstacleDetected')
+        rospy.sleep(2.0)
         if CanTurnLeft():
             TurnLeft()
         if CanTurnRight():
@@ -59,6 +70,7 @@ class ObjectDetected(smach.State):
 
     def execute(self, userdata):
         rospy.loginfo('Executing state ObjectDetected')
+        rospy.sleep(2.0)
         RecognizeObject()
         return 'recognizing'
 
@@ -70,6 +82,7 @@ class Turning(smach.State):
     def execute(self, userdata):
         global turn_done
         rospy.loginfo('Executing state Turning')
+        rospy.sleep(2.0)
         if turn_done:
             turn_done = False
             return 'go_forward'       
@@ -82,10 +95,12 @@ class RecognizingObject(smach.State):
         smach.State.__init__(self, outcomes=['recognizing','obstacle_detected'])
 
     def execute(self, userdata):
-        global recognizing
+        global object_recognized, object_detected
         rospy.loginfo('Executing state Recognizing')
-        if recognizing:
-            recognizing = False
+        rospy.sleep(2.0)
+        if object_recognized:
+            object_recognized = False
+            object_detected = False
             return 'obstacle_detected'       
         else:
             return 'recognizing'
@@ -114,15 +129,24 @@ def TurnBack():
     rospy.loginfo("Turning back")
 
 def FollowWall():
-    follow_wall_pub.publish(True)
-    rospy.loginfo("Start Following Wall")
+    global following_wall
+    if not following_wall:
+        following_wall = True
+        go_forward_pub.publish(True)
+        follow_wall_pub.publish(True)
+        rospy.loginfo("Start Following Wall")
 
 def StopFollowWall():
-    follow_wall_pub.publish(False)
-    rospy.loginfo("Stop Following Wall")
+    global following_wall
+    if following_wall:
+        following_wall = False
+        go_forward_pub.publish(False)
+        follow_wall_pub.publish(False)
+        rospy.loginfo("Stop Following Wall")
 
 def RecognizeObject():
-    recognize_object_pub.publish(True)
+    recognize_object_pub.publish(object_location)
+    rospy.loginfo("Start recognizing object")
 
 def TurnDoneCallback(data):
     global turn_done
@@ -133,6 +157,12 @@ def ObjectRecognizedCallback(data):
     global object_recognized
     object_recognized = data
     rospy.loginfo("Object Recognized: %s", str(data))
+
+def ObjectDetectedCallback(data):
+    global object_detected, object_location
+    object_detected = True
+    object_location = data
+    rospy.loginfo("Object Detected: %s", str(data))
 
 def IRCallback(data):
     global fl_side, fr_side, bl_side, br_side, l_front, r_front
@@ -146,17 +176,20 @@ def IRCallback(data):
     rospy.loginfo("vars: %d, %d", fl_side, fr_side)
 
 def main():
-    global turn_pub, follow_wall_pub, recognize_object_pub
+    global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub
     rospy.init_node('brain')
     
     sm = smach.StateMachine(outcomes=['error'])
     rospy.Subscriber("/arduino/adc", ADConverter, IRCallback)
     rospy.Subscriber("/controller/turn/done", Bool, TurnDoneCallback)
-    rospy.Subscriber("/vision/object_recognized", String, ObjectRecognizedCallback)
+    rospy.Subscriber("/vision/object_recognized", String, ObjectRecognizedCallback) # type?
+    rospy.Subscriber("/vision/object_detected", String, ObjectDetectedCallback) # type?
 
     turn_pub = rospy.Publisher("/controller/turn/angle", Float64, queue_size=1)
     follow_wall_pub = rospy.Publisher("/controller/follow_wall/activate", Bool, queue_size=1)
-    recognize_object_pub = rospy.Publisher("/vision/recognize_object", Bool, queue_size=1)
+    go_forward_pub = rospy.Publisher("/controller/forward/active", Bool, queue_size=1)
+    recognize_object_pub = rospy.Publisher("/vision/recognize_object", String, queue_size=1) # type?
+
     with sm:
         smach.StateMachine.add('GO_FORWARD', GoForward(), 
                                transitions={'go_forward':'GO_FORWARD',
