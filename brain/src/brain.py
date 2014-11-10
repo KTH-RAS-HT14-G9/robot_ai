@@ -7,7 +7,7 @@ import sys
 from std_msgs.msg import Bool
 from std_msgs.msg import Float64
 from std_msgs.msg import String
-from ras_arduino_msgs.msg import ADConverter
+from ir_converter.msg import Distance
 
 ######################## VARIABLES #########################
 
@@ -166,12 +166,12 @@ def ObjectDetectedCallback(data):
 
 def IRCallback(data):
     global fl_side, fr_side, bl_side, br_side, l_front, r_front
-    fl_side = data.ch1;
-    fr_side = data.ch2;
-    bl_side = data.ch3;
-    br_side = data.ch4;
-    l_front = data.ch7;
-    r_front = data.ch8;
+    fl_side = data.fl_side;
+    fr_side = data.fr_side;
+    bl_side = data.bl_side;
+    br_side = data.br_side;
+    l_front = data.l_front;
+    r_front = data.r_front;
     rospy.loginfo("IR callback: %d, %d, %d, %d, %d, %d", data.ch1, data.ch2, data.ch3 ,data.ch4 ,data.ch7,data.ch8)
     rospy.loginfo("vars: %d, %d", fl_side, fr_side)
 
@@ -180,7 +180,7 @@ def main():
     rospy.init_node('brain')
     
     sm = smach.StateMachine(outcomes=['error'])
-    rospy.Subscriber("/arduino/adc", ADConverter, IRCallback)
+    rospy.Subscriber("/robot_ai/distance", Distance, IRCallback)
     rospy.Subscriber("/controller/turn/done", Bool, TurnDoneCallback)
     rospy.Subscriber("/vision/object_recognized", String, ObjectRecognizedCallback) # type?
     rospy.Subscriber("/vision/object_detected", String, ObjectDetectedCallback) # type?
