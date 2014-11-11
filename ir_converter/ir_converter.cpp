@@ -39,8 +39,6 @@ void IRConverter::publishDistance()
     msg.l_front = l_front;
     msg.r_front = r_front;
     distance_publisher.publish(msg);
-    ROS_INFO("publising distance. fl side: %f, front right: %f", fl_side, r_front);
-
 }
 
 int main(int argc, char **argv)
