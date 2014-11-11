@@ -11,6 +11,8 @@ from ir_converter.msg import Distance
 
 ######################## VARIABLES #########################
 
+turn_threshold = 0.35
+obstacle_threshold = 0.30
 fl_side = 0
 fr_side = 0
 bl_side = 0
@@ -37,8 +39,7 @@ class GoForward(smach.State):
         smach.State.__init__(self, outcomes=['go_forward', 'stopping'])
 
     def execute(self, userdata):
-        rospy.loginfo('Executing state GO_FORWARD')
-        rospy.sleep(2.0)
+        
         if ObstacleAhead():
             StopFollowWall()
             return 'stopping'
@@ -53,8 +54,7 @@ class Stopping(smach.State):
 
     def execute(self, userdata):
         global stopping_done
-        rospy.loginfo('Executing state STOPPING')
-        rospy.sleep(2.0)
+        
         if stopping_done:
             stopping_done = False
             if object_detected:
@@ -70,8 +70,7 @@ class ObstacleDetected(smach.State):
         smach.State.__init__(self, outcomes=['turning'])
 
     def execute(self, userdata):
-        rospy.loginfo('Executing state ObstacleDetected')
-        rospy.sleep(2.0)
+ 
         if CanTurnLeft():
             TurnLeft()
         if CanTurnRight():
@@ -86,8 +85,7 @@ class ObjectDetected(smach.State):
         smach.State.__init__(self, outcomes=['recognizing'])
 
     def execute(self, userdata):
-        rospy.loginfo('Executing state ObjectDetected')
-        rospy.sleep(2.0)
+       
         RecognizeObject()
         return 'recognizing'
 
@@ -98,8 +96,7 @@ class Turning(smach.State):
 
     def execute(self, userdata):
         global turn_done
-        rospy.loginfo('Executing state Turning')
-        rospy.sleep(2.0)
+ 
         if turn_done:
             turn_done = False
             return 'go_forward'       
@@ -113,8 +110,7 @@ class RecognizingObject(smach.State):
 
     def execute(self, userdata):
         global recognizing_done, object_detected
-        rospy.loginfo('Executing state Recognizing')
-        rospy.sleep(2.0)
+        
         if recognizing_done:
             recognizing_done = False
             object_detected = False
@@ -125,13 +121,13 @@ class RecognizingObject(smach.State):
 ######################## FUNCTIONS #########################
 
 def CanTurnLeft():
-    return True if fl_side > 0.20 and bl_side > 0.20 else False
+    return True if fl_side > turn_threshold and bl_side > turn_threshold else False
 
 def CanTurnRight():
-    return True if fr_side > 0.20 and br_side > 0.20 else False
+    return True if fr_side > turn_threshold and br_side > turn_threshold else False
 
 def ObstacleAhead():
-    return True if l_front < 0.15 and r_front < 0.15 else False
+    return True if l_front < obstacle_threshold or r_front < obstacle_threshold else False
 
 def TurnLeft():
     turn_pub.publish(90.0)
@@ -194,8 +190,6 @@ def IRCallback(data):
     br_side = data.br_side;
     l_front = data.l_front;
     r_front = data.r_front;
-    rospy.loginfo("IR callback: %d, %d, %d, %d, %d, %d", data.ch1, data.ch2, data.ch3 ,data.ch4 ,data.ch7,data.ch8)
-    rospy.loginfo("vars: %d, %d", fl_side, fr_side)
 
 def main():
     global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub
