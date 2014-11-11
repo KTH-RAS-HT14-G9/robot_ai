@@ -12,7 +12,7 @@ from ir_converter.msg import Distance
 ######################## VARIABLES #########################
 
 turn_threshold = 0.35
-obstacle_threshold = 0.30
+obstacle_threshold = 0.20
 fl_side = 0
 fr_side = 0
 bl_side = 0
@@ -42,6 +42,7 @@ class GoForward(smach.State):
         
         if ObstacleAhead():
             StopFollowWall()
+            rospy.loginfo("GOING_FORWARD ==> STOPPING")
             return 'stopping'
         else:
             FollowWall()
@@ -58,8 +59,10 @@ class Stopping(smach.State):
         if stopping_done:
             stopping_done = False
             if object_detected:
+                rospy.loginfo("STOPPING ==> OBJECT_DETECTED")
                 return 'object_detected'
             else:
+                rospy.loginfo("STOPPING ==> OBSTACLE_DETECTED")
                 return 'obstacle_detected'
         else:
             return 'stopping'
@@ -73,10 +76,11 @@ class ObstacleDetected(smach.State):
  
         if CanTurnLeft():
             TurnLeft()
-        if CanTurnRight():
+        elif CanTurnRight():
             TurnRight()
         else:
             TurnBack()
+        rospy.loginfo("OBSTACLE_DETECTED ==> TURNING")
         return 'turning'
 
 # define state ObjectDetected
@@ -87,6 +91,7 @@ class ObjectDetected(smach.State):
     def execute(self, userdata):
        
         RecognizeObject()
+        rospy.loginfo("OBJECT_DETECTED ==> RECOGNIZING")
         return 'recognizing'
 
  # define state Turning
@@ -99,6 +104,7 @@ class Turning(smach.State):
  
         if turn_done:
             turn_done = False
+            rospy.loginfo("TURNING ==> GOING_FORWARD")
             return 'go_forward'       
         else:
             return 'turning'
@@ -114,6 +120,7 @@ class RecognizingObject(smach.State):
         if recognizing_done:
             recognizing_done = False
             object_detected = False
+            rospy.loginfo("RECOGNIZING ==> OBSTACLE_DETECTED")
             return 'obstacle_detected'       
         else:
             return 'recognizing'
@@ -158,17 +165,17 @@ def StopFollowWall():
         rospy.loginfo("Stop Following Wall")
 
 def RecognizeObject():
-    recognize_object_pub.publish(object_location)
+    recognize_object_pub.publish(True)
     rospy.loginfo("Start recognizing object")
 
 def TurnDoneCallback(data):
     global turn_done
-    turn_done = data
+    turn_done = True
     rospy.loginfo("Turn done callback: %s", str(data))
 
 def StoppingDoneCallback(data):
     global stopping_done
-    stopping_done = data
+    stopping_done = True
     rospy.loginfo("Stopping done callback: %s", str(data))
 
 def ObjectRecognizedCallback(data):
@@ -198,14 +205,14 @@ def main():
     sm = smach.StateMachine(outcomes=['error'])
     rospy.Subscriber("/robot_ai/distance", Distance, IRCallback)
     rospy.Subscriber("/controller/turn/done", Bool, TurnDoneCallback)
-    rospy.Subscriber("/vision/recognizing_done", String, ObjectRecognizedCallback) # type?
-    rospy.Subscriber("/vision/object_detected", String, ObjectDetectedCallback) # type?
+    rospy.Subscriber("/vision/recognition/done", String, ObjectRecognizedCallback) 
+    rospy.Subscriber("/vision/detector/obstacle/distance", Float64, ObjectDetectedCallback) 
     rospy.Subscriber("/controller/forward/stopped", Bool, StoppingDoneCallback)
 
-    turn_pub = rospy.Publisher("/controller/turn/angle", Float64, queue_size=1)
-    follow_wall_pub = rospy.Publisher("/controller/follow_wall/activate", Bool, queue_size=1)
-    go_forward_pub = rospy.Publisher("/controller/forward/active", Bool, queue_size=1)
-    recognize_object_pub = rospy.Publisher("/vision/recognize_object", String, queue_size=1) # type?
+    turn_pub = rospy.Publisher("/controller/turn/angle", Float64, queue_size=10)
+    follow_wall_pub = rospy.Publisher("/controller/wall_follow/active", Bool, queue_size=10)
+    go_forward_pub = rospy.Publisher("/controller/forward/active", Bool, queue_size=10)
+    recognize_object_pub = rospy.Publisher("/vision/recognition/active", Bool, queue_size=10) # type?
 
     with sm:
         smach.StateMachine.add('GO_FORWARD', GoForward(), 
