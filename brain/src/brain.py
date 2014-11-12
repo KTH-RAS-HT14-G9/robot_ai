@@ -42,8 +42,10 @@ class GoForward(smach.State):
         smach.State.__init__(self, outcomes=['go_forward', 'stopping'])
 
     def execute(self, userdata):
-        
+        global stopping_done
         if ObstacleAhead():
+            if not go_forward and not following_wall:
+                stopping_done = True
             StopGoForward()
             StopFollowWall()
             rospy.loginfo("GOING_FORWARD ==> STOPPING")
