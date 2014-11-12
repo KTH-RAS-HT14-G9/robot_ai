@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import roslib#; roslib.load_manifest('smach_tutorials')
+import roslib
 import rospy
 import smach
 import smach_ros
@@ -11,6 +11,12 @@ from ir_converter.msg import Distance
 
 ######################## VARIABLES #########################
 
+reset_mc_pub = None
+recognize_object_pub = None
+turn_pub = None
+follow_wall_pub = None
+go_forward_pub = None
+
 turn_threshold = 0.35
 obstacle_threshold = 0.20
 fl_side = 0
@@ -19,10 +25,6 @@ bl_side = 0
 br_side = 0
 l_front = 0
 r_front = 0
-recognize_object_pub = None
-turn_pub = None
-follow_wall_pub = None
-go_forward_pub = None
 turn_done = False
 recognizing_done = False
 object_detected = False
@@ -137,20 +139,24 @@ def ObstacleAhead():
     return True if l_front < obstacle_threshold or r_front < obstacle_threshold else False
 
 def TurnLeft():
+    ResetMC();
     turn_pub.publish(90.0)
     rospy.loginfo("Turning left")
 
 def TurnRight():
+    ResetMC();
     turn_pub.publish(-90.0)
     rospy.loginfo("Turning right")
 
 def TurnBack():
+    ResetMC();
     turn_pub.publish(180.0)
     rospy.loginfo("Turning back")
 
 def FollowWall():
     global following_wall
     if not following_wall:
+        ResetMC();
         following_wall = True
         go_forward_pub.publish(True)
         follow_wall_pub.publish(True)
@@ -159,6 +165,7 @@ def FollowWall():
 def StopFollowWall():
     global following_wall
     if following_wall:
+        ResetMC();
         following_wall = False
         go_forward_pub.publish(False)
         follow_wall_pub.publish(False)
@@ -167,6 +174,10 @@ def StopFollowWall():
 def RecognizeObject():
     recognize_object_pub.publish(True)
     rospy.loginfo("Start recognizing object")
+
+def ResetMC():
+    reset_mc_pub.publish(True)
+    rospy.loginfo("Resetting MC pid")
 
 def TurnDoneCallback(data):
     global turn_done
@@ -199,7 +210,7 @@ def IRCallback(data):
     r_front = data.r_front;
 
 def main():
-    global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub
+    global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub, reset_mc_pub
     rospy.init_node('brain')
     
     sm = smach.StateMachine(outcomes=['error'])
@@ -212,7 +223,8 @@ def main():
     turn_pub = rospy.Publisher("/controller/turn/angle", Float64, queue_size=10)
     follow_wall_pub = rospy.Publisher("/controller/wall_follow/active", Bool, queue_size=10)
     go_forward_pub = rospy.Publisher("/controller/forward/active", Bool, queue_size=10)
-    recognize_object_pub = rospy.Publisher("/vision/recognition/active", Bool, queue_size=10) # type?
+    recognize_object_pub = rospy.Publisher("/vision/recognition/active", Bool, queue_size=10)
+    reset_mc_pub = rospy.Publisher("controller/motor/reset", Bool, queue_size=1)
 
     with sm:
         smach.StateMachine.add('GO_FORWARD', GoForward(), 
