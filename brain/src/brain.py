@@ -30,6 +30,7 @@ recognizing_done = False
 object_detected = False
 object_location = None
 following_wall = False
+go_forward = False
 stopping_done = False
 
 
@@ -41,13 +42,17 @@ class GoForward(smach.State):
         smach.State.__init__(self, outcomes=['go_forward', 'stopping'])
 
     def execute(self, userdata):
-        
+        global stopping_done
         if ObstacleAhead():
+            if not go_forward and not following_wall:
+                stopping_done = True
+            StopGoForward()
             StopFollowWall()
             rospy.loginfo("GOING_FORWARD ==> STOPPING")
             return 'stopping'
         else:
-            FollowWall()
+            StartFollowWall()
+            StartGoForward()
             return 'go_forward'
 
 # define state Stopping
@@ -106,6 +111,10 @@ class Turning(smach.State):
  
         if turn_done:
             turn_done = False
+            rospy.set_param('/controller/wall_follow/kp', 10.0)
+            StartFollowWall()
+            rospy.sleep(1.0)
+            rospy.set_param('/controller/wall_follow/kp', 4.0)
             rospy.loginfo("TURNING ==> GOING_FORWARD")
             return 'go_forward'       
         else:
@@ -139,37 +148,51 @@ def ObstacleAhead():
     return True if l_front < obstacle_threshold or r_front < obstacle_threshold else False
 
 def TurnLeft():
-    ResetMC();
+    ResetMC()
     turn_pub.publish(90.0)
     rospy.loginfo("Turning left")
 
 def TurnRight():
-    ResetMC();
+    ResetMC()
     turn_pub.publish(-90.0)
     rospy.loginfo("Turning right")
 
 def TurnBack():
-    ResetMC();
+    ResetMC()
     turn_pub.publish(180.0)
     rospy.loginfo("Turning back")
 
-def FollowWall():
+def StartFollowWall():
     global following_wall
     if not following_wall:
-        ResetMC();
+        ResetMC()
         following_wall = True
-        go_forward_pub.publish(True)
         follow_wall_pub.publish(True)
         rospy.loginfo("Start Following Wall")
 
 def StopFollowWall():
     global following_wall
     if following_wall:
-        ResetMC();
+        ResetMC()
         following_wall = False
-        go_forward_pub.publish(False)
         follow_wall_pub.publish(False)
         rospy.loginfo("Stop Following Wall")
+
+def StartGoForward():
+    global go_forward
+    if not go_forward:
+        ResetMC()
+        go_forward = True
+        go_forward_pub.publish(True)
+        rospy.loginfo("Start going forward")
+
+def StopGoForward():
+    global go_forward
+    if go_forward:
+        ResetMC()
+        go_forward = False
+        go_forward_pub.publish(False)
+        rospy.loginfo("Stop going forward")
 
 def RecognizeObject():
     recognize_object_pub.publish(True)
