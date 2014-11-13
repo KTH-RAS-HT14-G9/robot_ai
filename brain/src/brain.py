@@ -18,7 +18,7 @@ follow_wall_pub = None
 go_forward_pub = None
 
 turn_threshold = 0.35
-obstacle_threshold = 0.20
+obstacle_threshold = 0.30
 fl_side = 0
 fr_side = 0
 bl_side = 0

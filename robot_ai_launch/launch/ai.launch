@@ -1,0 +1,9 @@
+<launch>
+
+	<!-- launch ir distance converter -->
+	<node pkg="ir_converter" type="ir_converter" name="ir_converter" />
+
+	<!-- launch brain -->
+	<node pkg="brain" type="brain.py" name="brain" output="screen"/>
+
+</launch>
