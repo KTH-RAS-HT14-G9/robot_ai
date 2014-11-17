@@ -237,7 +237,7 @@ def main():
     rospy.init_node('brain')
     
     sm = smach.StateMachine(outcomes=['error'])
-    rospy.Subscriber("/robot_ai/distance", Distance, IRCallback)
+    rospy.Subscriber("/perception/ir/distance", Distance, IRCallback)
     rospy.Subscriber("/controller/turn/done", Bool, TurnDoneCallback)
     rospy.Subscriber("/vision/recognition/done", String, ObjectRecognizedCallback) 
     rospy.Subscriber("/vision/detector/obstacle/distance", Float64, ObjectDetectedCallback) 
