@@ -111,10 +111,10 @@ class Turning(smach.State):
  
         if turn_done:
             turn_done = False
-            rospy.set_param('/controller/wall_follow/kp', 10.0)
+            #rospy.set_param('/controller/wall_follow/kp', 10.0)
             StartFollowWall()
-            rospy.sleep(1.0)
-            rospy.set_param('/controller/wall_follow/kp', 4.0)
+            rospy.sleep(3.0)
+            #rospy.set_param('/controller/wall_follow/kp', 4.0)
             rospy.loginfo("TURNING ==> GOING_FORWARD")
             return 'go_forward'       
         else:
