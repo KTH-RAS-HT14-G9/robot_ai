@@ -32,6 +32,8 @@ bool IRConverter::ok() const {
 
 void IRConverter::publishDistance()
 {
+    using namespace robot::ir;
+
     //set params
     _filter_fl.set_inertia(_lowpass_inertia());
     _filter_fr.set_inertia(_lowpass_inertia());
@@ -41,12 +43,12 @@ void IRConverter::publishDistance()
     _filter_r.set_inertia(_lowpass_inertia());
 
     //convert to distance in meter
-    double fl_side = robot::ir::distance(robot::ir::id_front_left, ir_fl_side);
-    double fr_side = robot::ir::distance(robot::ir::id_front_right, ir_fr_side);
-    double bl_side = robot::ir::distance(robot::ir::id_rear_left, ir_bl_side);
-    double br_side = robot::ir::distance(robot::ir::id_rear_right, ir_br_side);
-    double l_front = robot::ir::distance(robot::ir::id_front_long_left, ir_l_front);
-    double r_front = robot::ir::distance(robot::ir::id_front_long_right, ir_r_front);
+    double fl_side = distance(id_front_left,        ir_fl_side) + offset_front_left;
+    double fr_side = distance(id_front_right,       ir_fr_side) + offset_front_right;
+    double bl_side = distance(id_rear_left,         ir_bl_side) + offset_rear_left;
+    double br_side = distance(id_rear_right,        ir_br_side) + offset_rear_right;
+    double l_front = distance(id_front_long_left,   ir_l_front);
+    double r_front = distance(id_front_long_right,  ir_r_front);
 
     //filter and publish message
     ir_converter::Distance msg;
