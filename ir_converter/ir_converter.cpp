@@ -45,8 +45,8 @@ void IRConverter::publishDistance()
     //convert to distance in meter
     double fl_side = distance(id_front_left,        ir_fl_side) + offset_front_left;
     double fr_side = distance(id_front_right,       ir_fr_side) + offset_front_right;
-    double bl_side = distance(id_rear_left,         ir_bl_side) + offset_rear_left;
-    double br_side = distance(id_rear_right,        ir_br_side) + offset_rear_right;
+    double bl_side = distance(id_front_left,         ir_bl_side) + offset_rear_left;
+    double br_side = distance(id_front_right,        ir_br_side) + offset_rear_right;
     double l_front = distance(id_front_long_left,   ir_l_front);
     double r_front = distance(id_front_long_right,  ir_r_front);
 
