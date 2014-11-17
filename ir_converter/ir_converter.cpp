@@ -7,7 +7,7 @@ IRConverter::IRConverter()
     ,_filter_br(0.8)
     ,_filter_l(0.8)
     ,_filter_r(0.8)
-    ,_lowpass_inertia("/perception/ir/filter_inertia",0.8)
+    ,_lowpass_inertia("/perception/ir/filter_inertia",0.5)
 {
     handle = ros::NodeHandle("");
     ir_subscriber = handle.subscribe("/arduino/adc", 1000, &IRConverter::IRCallback, this);
