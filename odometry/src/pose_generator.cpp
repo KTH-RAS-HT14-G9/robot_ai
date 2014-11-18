@@ -14,6 +14,19 @@ nav_msgs::Odometry _odom;
 //ros::Publisher _pub_tf;
 ros::Publisher _pub_odom;
 
+void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
+{
+    q.setRPY(0, 0, _theta);
+
+    odom.pose.pose.position.x = _x;
+    odom.pose.pose.position.y = _y;
+
+    odom.pose.pose.orientation.x = q.x();
+    odom.pose.pose.orientation.y = q.y();
+    odom.pose.pose.orientation.z = q.z();
+    odom.pose.pose.orientation.w = q.w();
+}
+
 void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
 {
     _odom.header.stamp = ros::Time::now();
@@ -33,19 +46,6 @@ void connect_callback(const ros::SingleSubscriberPublisher& pub)
 {
     pack_pose(_q,_odom);
     pub.publish(_odom);
-}
-
-void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
-{
-    q.setRPY(0, 0, _theta);
-
-    odom.pose.pose.position.x = _x;
-    odom.pose.pose.position.y = _y;
-
-    odom.pose.pose.orientation.x = q.x();
-    odom.pose.pose.orientation.y = q.y();
-    odom.pose.pose.orientation.z = q.z();
-    odom.pose.pose.orientation.w = q.w();
 }
 
 
