@@ -4,8 +4,8 @@
 #include <common/robot.h>
 #include <tf/transform_broadcaster.h>
 
-const double _rad_per_tick = ((robot::dim::wheel_radius*2.0) / (robot::dim::wheel_distance)) / 2.0 / (180.0 * M_PI);
-const double _dist_per_tick = M_PI * (robot::dim::wheel_radius*2.0) / robot::prop::ticks_per_rev;
+//------------------------------------------------------------------------------
+// Members
 
 double _x,_y,_theta;
 tf::Quaternion _q;
@@ -14,6 +14,12 @@ nav_msgs::Odometry _odom;
 //ros::Publisher _pub_tf;
 ros::Publisher _pub_odom;
 
+//------------------------------------------------------------------------------
+// Methods
+
+/**
+  * Packs current state in a odom message. Needs a quaternion for conversion.
+  */
 void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
 {
     q.setRPY(0, 0, _theta);
@@ -29,16 +35,25 @@ void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
     odom.pose.pose.orientation.w = q.w();
 }
 
+//------------------------------------------------------------------------------
+// Callbacks
+
+/**
+  * Adapter from http://simreal.com/content/Odometry
+  */
 void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
 {
-    _theta += (encoders->delta_encoder1 - encoders->delta_encoder2)*_rad_per_tick;
-    double dDist = (encoders->delta_encoder1 + encoders->delta_encoder2) / 2.0 * _dist_per_tick;
+    double dist_l = (2.0*M_PI*robot::dim::wheel_radius) * (encoders->delta_encoder1 / robot::prop::ticks_per_rev);
+    double dist_r = (2.0*M_PI*robot::dim::wheel_radius) * (encoders->delta_encoder2 / robot::prop::ticks_per_rev);
 
-    _x -= dDist * cos(_theta);
-    _y -= dDist * sin(_theta);
+    _theta += (dist_r - dist_l) / robot::dim::wheel_distance;
+
+    double dist = (dist_r + dist_l) / 2.0;
+
+    _x += dist * cos(_theta);
+    _y += dist * sin(_theta);
 
     pack_pose(_q, _odom);
-
     _pub_odom.publish(_odom);
 }
 
@@ -48,6 +63,8 @@ void connect_callback(const ros::SingleSubscriberPublisher& pub)
     pub.publish(_odom);
 }
 
+//------------------------------------------------------------------------------
+// Entry point
 
 int main(int argc, char **argv)
 {
