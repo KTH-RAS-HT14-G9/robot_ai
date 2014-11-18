@@ -8,6 +8,7 @@ const double _rad_per_tick = (robot::dim::wheel_radius*2.0) / (robot::dim::wheel
 const double _dist_per_tick = M_PI * (robot::dim::wheel_radius*2.0) / robot::prop::ticks_per_rev;
 
 double _x,_y,_theta;
+tf::Quaternion _q;
 nav_msgs::Odometry _odom;
 
 //ros::Publisher _pub_tf;
@@ -23,18 +24,28 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
     _x += dDist * cos(_theta);
     _y += dDist * sin(_theta);
 
-    tf::Quaternion q;
-    q.setRPY(0, 0, _theta);
-
-    _odom.pose.pose.position.x = _x;
-    _odom.pose.pose.position.y = _y;
-
-    _odom.pose.pose.orientation.x = q.x();
-    _odom.pose.pose.orientation.y = q.y();
-    _odom.pose.pose.orientation.z = q.z();
-    _odom.pose.pose.orientation.w = q.w();
+    pack_pose(_q, _odom);
 
     _pub_odom.publish(_odom);
+}
+
+void connect_callback(const ros::SingleSubscriberPublisher& pub)
+{
+    pack_pose(_q,_odom);
+    pub.publish(_odom);
+}
+
+void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
+{
+    q.setRPY(0, 0, _theta);
+
+    odom.pose.pose.position.x = _x;
+    odom.pose.pose.position.y = _y;
+
+    odom.pose.pose.orientation.x = q.x();
+    odom.pose.pose.orientation.y = q.y();
+    odom.pose.pose.orientation.z = q.z();
+    odom.pose.pose.orientation.w = q.w();
 }
 
 
@@ -49,7 +60,7 @@ int main(int argc, char **argv)
     _theta = M_PI/2.0;
 
     ros::Subscriber sub_enc = n.subscribe("/arduino/encoders",10,callback_encoders);
-    _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10);
+    _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
 
     ros::spin();
 
