@@ -4,7 +4,7 @@
 #include <common/robot.h>
 #include <tf/transform_broadcaster.h>
 
-const double _rad_per_tick = (robot::dim::wheel_radius*2.0) / (robot::dim::wheel_distance) / 2.0 / (180.0 * M_PI);
+const double _rad_per_tick = ((robot::dim::wheel_radius*2.0) / (robot::dim::wheel_distance)) / 2.0 / (180.0 * M_PI);
 const double _dist_per_tick = M_PI * (robot::dim::wheel_radius*2.0) / robot::prop::ticks_per_rev;
 
 double _x,_y,_theta;
@@ -18,6 +18,8 @@ void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
 {
     q.setRPY(0, 0, _theta);
 
+    odom.header.stamp = ros::Time::now();
+
     odom.pose.pose.position.x = _x;
     odom.pose.pose.position.y = _y;
 
@@ -29,13 +31,11 @@ void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
 
 void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
 {
-    _odom.header.stamp = ros::Time::now();
-
     _theta += (encoders->delta_encoder1 - encoders->delta_encoder2)*_rad_per_tick;
     double dDist = (encoders->delta_encoder1 + encoders->delta_encoder2) / 2.0 * _dist_per_tick;
 
-    _x += dDist * cos(_theta);
-    _y += dDist * sin(_theta);
+    _x -= dDist * cos(_theta);
+    _y -= dDist * sin(_theta);
 
     pack_pose(_q, _odom);
 
