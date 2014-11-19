@@ -111,10 +111,10 @@ class Turning(smach.State):
  
         if turn_done:
             turn_done = False
-            rospy.set_param('/controller/wall_follow/kp', 10.0)
+            #rospy.set_param('/controller/wall_follow/kp', 10.0)
             StartFollowWall()
-            rospy.sleep(1.0)
-            rospy.set_param('/controller/wall_follow/kp', 4.0)
+            rospy.sleep(3.0)
+            #rospy.set_param('/controller/wall_follow/kp', 4.0)
             rospy.loginfo("TURNING ==> GOING_FORWARD")
             return 'go_forward'       
         else:
@@ -237,7 +237,7 @@ def main():
     rospy.init_node('brain')
     
     sm = smach.StateMachine(outcomes=['error'])
-    rospy.Subscriber("/robot_ai/distance", Distance, IRCallback)
+    rospy.Subscriber("/perception/ir/distance", Distance, IRCallback)
     rospy.Subscriber("/controller/turn/done", Bool, TurnDoneCallback)
     rospy.Subscriber("/vision/recognition/done", String, ObjectRecognizedCallback) 
     rospy.Subscriber("/vision/detector/obstacle/distance", Float64, ObjectDetectedCallback) 
