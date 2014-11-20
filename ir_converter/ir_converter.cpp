@@ -65,11 +65,5 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "ir_converter");
     IRConverter ir;
-    ros::Rate loop_rate(robot::prop::encoder_publish_frequency); // change to something else?
-
-    while(ir.ok())
-    {
-        ros::spinOnce();
-        loop_rate.sleep();
-    }
+    ros::spin();
 }
