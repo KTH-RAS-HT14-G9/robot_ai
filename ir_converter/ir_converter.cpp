@@ -26,10 +26,6 @@ void IRConverter::IRCallback(const ras_arduino_msgs::ADConverter::ConstPtr &adc)
     publishDistance();
 }
 
-bool IRConverter::ok() const {
-    return handle.ok();
-}
-
 void IRConverter::publishDistance()
 {
     using namespace robot::ir;

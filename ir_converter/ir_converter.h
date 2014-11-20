@@ -12,7 +12,6 @@ class IRConverter
 {
 public:
     IRConverter();
-    bool ok() const;
     void IRCallback(const ras_arduino_msgs::ADConverter::ConstPtr &adc);
     void publishDistance();
 private:
