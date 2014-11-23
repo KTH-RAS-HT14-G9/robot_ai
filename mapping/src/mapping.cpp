@@ -220,8 +220,8 @@ void Mapping::publishMap()
             double i = (cell == FREE) ? 0.0 : (cell == OCCUPIED) ? 1.0 : 0.5;
 
             PCPoint p(i);
-            p.x = x/100;
-            p.y = y/100;
+            p.x = (double) x/100.0;
+            p.y = (double) y/100.0;
             msg->points.push_back(p);
         }
     }
