@@ -26,10 +26,6 @@ void IRConverter::IRCallback(const ras_arduino_msgs::ADConverter::ConstPtr &adc)
     publishDistance();
 }
 
-bool IRConverter::ok() const {
-    return handle.ok();
-}
-
 void IRConverter::publishDistance()
 {
     using namespace robot::ir;
@@ -65,11 +61,5 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "ir_converter");
     IRConverter ir;
-    ros::Rate loop_rate(robot::prop::encoder_publish_frequency); // change to something else?
-
-    while(ir.ok())
-    {
-        ros::spinOnce();
-        loop_rate.sleep();
-    }
+    ros::spin();
 }
