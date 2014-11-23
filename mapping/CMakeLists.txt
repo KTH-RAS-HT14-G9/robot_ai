@@ -9,6 +9,8 @@ find_package(catkin REQUIRED COMPONENTS
   odometry
   roscpp
   common
+  tf
+  pcl_ros
 )
 
 ## System dependencies are found with CMake's conventions
