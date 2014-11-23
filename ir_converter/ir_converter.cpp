@@ -1,4 +1,5 @@
 #include "ir_converter.h"
+#include <common/util.h>
 
 IRConverter::IRConverter()
     :_filter_fl(0.0)
@@ -58,7 +59,7 @@ void IRConverter::publishDistance()
 }
 
 int main(int argc, char **argv)
-{
+{   
     ros::init(argc, argv, "ir_converter");
     IRConverter ir;
     ros::spin();

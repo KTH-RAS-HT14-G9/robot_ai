@@ -1,3 +1,6 @@
+#Ignore qt files
+*.user
+
 # Ignore nested git repositories
 .git
 
