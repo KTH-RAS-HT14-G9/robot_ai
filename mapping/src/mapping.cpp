@@ -35,14 +35,14 @@ Mapping::Mapping() :
     distance_sub = handle.subscribe("/perception/ir/distance", 1000, &Mapping::distanceCallback, this);
     odometry_sub = handle.subscribe("/pose/odometry/", 1000, &Mapping::odometryCallback, this);
 
-    pc_pub = handle.advertise<pcl::PointCloud<pcl::PointXYZI> >("/mapping/point_cloud", 10);
+    pc_pub = handle.advertise<PointCloud>("/mapping/point_cloud", 1);
 
     initProbGrid();
     initOccGrid();
-    initTF();
+    broadcastTransform();
 }
 
-void Mapping::initTF()
+void Mapping::broadcastTransform()
 {
     tf_broadcaster.sendTransform(
                 tf::StampedTransform(
@@ -207,7 +207,11 @@ void Mapping::odometryCallback(const nav_msgs::Odometry::ConstPtr& odom)
 
 void Mapping::publishMap()
 {
-    PointCloud pc;
+    PointCloud::Ptr msg (new PointCloud);
+    msg->header.frame_id = "map";
+    msg->height = GRID_HEIGHT;
+    msg->width = GRID_WIDTH;
+
     for(int x = 0; x < GRID_WIDTH; ++x)
     {
         for(int y = 0; y < GRID_HEIGHT; ++y)
@@ -218,11 +222,10 @@ void Mapping::publishMap()
             PCPoint p(i);
             p.x = x;
             p.y = y;
-            pc.push_back(p);
+            msg->points.push_back(p);
         }
     }
-
-    pc_pub.publish(pc);
+    pc_pub.publish(msg);
 }
 
 int main(int argc, char **argv)
@@ -232,11 +235,10 @@ int main(int argc, char **argv)
     ros::Rate loop_rate(10); // what should this be?
     while(ros::ok())
     {
-        mapping.publishMap();
-
+        mapping.broadcastTransform();
         mapping.updateGrid();
+        mapping.publishMap();
         ros::spinOnce();
         loop_rate.sleep();
     }
-    ROS_INFO("end");
 }

@@ -33,8 +33,9 @@ public:
     void odometryCallback(const nav_msgs::Odometry::ConstPtr&);
     void updateGrid();
     void publishMap();
+    void broadcastTransform();
+
 private:
-    void initTF();
     void initProbGrid();
     void initOccGrid();
     void updateProbCell(Point2D<int>, double);
