@@ -11,7 +11,7 @@ double _x,_y,_theta;
 tf::Quaternion _q;
 nav_msgs::Odometry _odom;
 
-//ros::Publisher _pub_tf;
+tf::TransformBroadcaster pub_tf;
 ros::Publisher _pub_odom;
 
 //------------------------------------------------------------------------------
@@ -61,6 +61,11 @@ void connect_callback(const ros::SingleSubscriberPublisher& pub)
 {
     pack_pose(_q,_odom);
     pub.publish(_odom);
+
+    tf::Transform transform;
+    transform.setOrigin(tf::Vector3(_x, _y, 0));
+    transform.setRotation(_q);
+    pub_tf.sendTransform(tf::StampedTransform(transform, _odom.header.stamp, "map", "robot"));
 }
 
 //------------------------------------------------------------------------------
