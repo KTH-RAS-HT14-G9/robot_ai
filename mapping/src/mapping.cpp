@@ -220,8 +220,8 @@ void Mapping::publishMap()
             double i = (cell == FREE) ? 0.0 : (cell == OCCUPIED) ? 1.0 : 0.5;
 
             PCPoint p(i);
-            p.x = x;
-            p.y = y;
+            p.x = x/100;
+            p.y = y/100;
             msg->points.push_back(p);
         }
     }
@@ -233,11 +233,14 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "mapping");
     Mapping mapping;
     ros::Rate loop_rate(10); // what should this be?
+    int counter = 0;
     while(ros::ok())
     {
+        ++counter;
         mapping.broadcastTransform();
         mapping.updateGrid();
-        mapping.publishMap();
+        if(counter % 100 == 0)
+            mapping.publishMap();
         ros::spinOnce();
         loop_rate.sleep();
     }
