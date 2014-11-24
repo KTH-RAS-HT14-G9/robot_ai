@@ -32,8 +32,8 @@ Mapping::Mapping() :
     l_front(INVALID_READING), r_front(INVALID_READING)
 {
     handle = ros::NodeHandle("");
-    distance_sub = handle.subscribe("/perception/ir/distance", 1000, &Mapping::distanceCallback, this);
-    odometry_sub = handle.subscribe("/pose/odometry/", 1000, &Mapping::odometryCallback, this);
+    distance_sub = handle.subscribe("/perception/ir/distance", 10, &Mapping::distanceCallback, this);
+    odometry_sub = handle.subscribe("/pose/odometry/", 10, &Mapping::odometryCallback, this);
 
     pc_pub = handle.advertise<PointCloud>("/mapping/point_cloud", 1);
 
@@ -52,8 +52,9 @@ void Mapping::broadcastTransform()
 
 Point2D<int> Mapping::posToCell(Point2D<double> pos)
 {
-    int x = round(pos.x/100.0) + GRID_X_OFFSET;
-    int y = round(pos.y/100.0) + GRID_Y_OFFSET;
+    int x = round(pos.x*100.0);// + GRID_X_OFFSET;
+    int y = round(pos.y*100.0);// + GRID_Y_OFFSET;
+    // ROS_INFO("(%f, %f) ==> (%d, %d)", pos.x, pos.y, x, y);
     return Point2D<int>(x,y);
 }
 
@@ -62,8 +63,8 @@ void Mapping::updateGrid()
     if(isReadingValid(fl_side))
         updateFL();
 
-    if(isReadingValid(fr_side))
-        updateFR();
+    if(isReadingValid(bl_side))
+        updateBL();
 
     if(isReadingValid(fr_side))
         updateBL();
@@ -76,13 +77,13 @@ void Mapping::updateGrid()
 
 bool Mapping::isReadingValid(double value)
 {
-    return value > 0.0;
+    return value > 0.0 && value < 0.8;
 }
 
 void Mapping::updateFL()
 {
-    Point2D<double> fl_point = getPointPos(-1*robot::ir::offset_front_left, robot::ir::offset_front_left_forward, fl_side);
-    Point2D<double> fl_sensor = getPointPos(-1*robot::ir::offset_front_left, robot::ir::offset_front_left_forward, 0.0);
+    Point2D<double> fl_point = getPointPos(-1.0*robot::ir::offset_front_left, robot::ir::offset_front_left_forward, fl_side);
+    Point2D<double> fl_sensor = getPointPos(-1.0*robot::ir::offset_front_left, robot::ir::offset_front_left_forward, 0.0);
     updateProbCell(posToCell(fl_point), P_OCC);
     updateOccCell(posToCell(fl_point));
     updateFreeCells(fl_sensor, fl_point);
@@ -99,8 +100,8 @@ void Mapping::updateFR()
 
 void Mapping::updateBR()
 {
-    Point2D<double> br_point = getPointPos(robot::ir::offset_rear_right, -1*robot::ir::offset_rear_right_forward, br_side);
-    Point2D<double> br_sensor = getPointPos(robot::ir::offset_rear_right, -1*robot::ir::offset_rear_right_forward, 0.0);
+    Point2D<double> br_point = getPointPos(robot::ir::offset_rear_right, -1.0*robot::ir::offset_rear_right_forward, br_side);
+    Point2D<double> br_sensor = getPointPos(robot::ir::offset_rear_right, -1.0*robot::ir::offset_rear_right_forward, 0.0);
     updateProbCell(posToCell(br_point), P_OCC);
     updateOccCell(posToCell(br_point));
     updateFreeCells(br_sensor, br_point);
@@ -108,8 +109,8 @@ void Mapping::updateBR()
 
 void Mapping::updateBL()
 {
-    Point2D<double> bl_point = getPointPos(-1*robot::ir::offset_rear_left, -1*robot::ir::offset_rear_left_forward, bl_side);
-    Point2D<double> bl_sensor = getPointPos(-1*robot::ir::offset_rear_left, -1*robot::ir::offset_rear_left_forward, 0.0);
+    Point2D<double> bl_point = getPointPos(-1.0*robot::ir::offset_rear_left, -1.0*robot::ir::offset_rear_left_forward, bl_side);
+    Point2D<double> bl_sensor = getPointPos(-1.0*robot::ir::offset_rear_left, -1.0*robot::ir::offset_rear_left_forward, 0.0);
     updateProbCell(posToCell(bl_point), P_OCC);
     updateOccCell(posToCell(bl_point));
     updateFreeCells(bl_sensor, bl_point);
@@ -126,29 +127,51 @@ Point2D<double> Mapping::getPointPos(double side_offset, double forward_offset, 
 
     geometry_msgs::PointStamped map_point;
     tf_listener.transformPoint("map", robot_point, map_point);
-
     return Point2D<double>(map_point.point.x, map_point.point.y);
 }
 
 void Mapping::updateFreeCells(Point2D<double> sensor, Point2D<double> obstacle)
 {
-    double k = (sensor.y - obstacle.y)/(sensor.x - obstacle.x);
-    double m = sensor.y - k*sensor.x;
-
-    double min_x = std::min(sensor.x, obstacle.x) + 1.0;
+    double min_x = std::min(sensor.x, obstacle.x);
     double max_x = std::max(sensor.x, obstacle.x);
-    double min_y = std::min(sensor.y, obstacle.y) + 1.0;
+    double min_y = std::min(sensor.y, obstacle.y);
     double max_y = std::max(sensor.y, obstacle.y);
 
-    for(double x = min_x; x < max_x; ++x)
+    double x1 = min_x;
+    double x2 = max_x;
+    double y1 = sensor.x == x1 ? sensor.y : obstacle.y;
+    double y2 = sensor.x == x2 ? sensor.y : obstacle.y;
+    double dx = x2-x1;
+    double dy = y2-y1;
+
+
+  //  ROS_INFO("sensor: %f, %f, obstacle: %f, %f", sensor.x, sensor.y, obstacle.x, obstacle.y);
+ //   ROS_INFO("min x %f, y %f, max x %f, y %f", min_x, min_y, max_x, max_y);
+
+    if(dx < 0.01)
     {
-        for(double y = min_y; y < max_y; ++y)
+        double x = x1;
+        for(double y = min_y; y < max_y; y +=0.01)
         {
             Point2D<int> cell = posToCell(Point2D<double>(x,y));
+      //      ROS_INFO("Marking: (%d,%d)", cell.x, cell.y);
+            updateProbCell(cell, P_FREE);
+            updateOccCell(cell);
+        }
+    } else {
+
+        for(double x = x1; x < x2; x+=0.01)
+        {
+            double y = y1 + dy * (x-x1) / dx;
+            Point2D<int> cell = posToCell(Point2D<double>(x,y));
+        //    ROS_INFO("Marking: (%d,%d)", cell.x, cell.y);
             updateProbCell(cell, P_FREE);
             updateOccCell(cell);
         }
     }
+
+    //ROS_INFO("done");
+   // ros::Duration(10.0).sleep();
 }
 
 void Mapping::updateProbCell(Point2D<int> cell, double p)
@@ -160,9 +183,10 @@ void Mapping::updateOccCell(Point2D<int> cell)
 {
     if(prob_grid[cell.x][cell.y] > FREE_OCCUPIED_THRESHOLD)
         occ_grid[cell.x][cell.y] = OCCUPIED;
-    if(prob_grid[cell.x][cell.y] < FREE_OCCUPIED_THRESHOLD)
+    else if(prob_grid[cell.x][cell.y] < FREE_OCCUPIED_THRESHOLD)
         occ_grid[cell.x][cell.y] = FREE;
-    occ_grid[cell.x][cell.y] = UNKNOWN;
+    else
+        occ_grid[cell.x][cell.y] = UNKNOWN;
 
 }
 
@@ -189,7 +213,7 @@ void Mapping::initOccGrid()
 }
 
 void Mapping::distanceCallback(const ir_converter::Distance::ConstPtr& distance)
-{
+{   
     fl_side = distance->fl_side;
     bl_side = distance->bl_side;
     fr_side = distance->fr_side;
@@ -212,11 +236,23 @@ void Mapping::publishMap()
     msg->height = GRID_HEIGHT;
     msg->width = GRID_WIDTH;
 
+    int numFree = 0;
+    int numUnknown = 0;
+    int numOcc = 0;
+
     for(int x = 0; x < GRID_WIDTH; ++x)
     {
         for(int y = 0; y < GRID_HEIGHT; ++y)
         {
             int cell = occ_grid[x][y];
+
+            if(cell == OCCUPIED)
+                ++numOcc;
+            else if(cell == FREE)
+                ++numFree;
+            else if(cell == UNKNOWN)
+                ++numUnknown;
+
             double i = (cell == FREE) ? 0.0 : (cell == OCCUPIED) ? 1.0 : 0.5;
 
             PCPoint p(i);
@@ -225,6 +261,8 @@ void Mapping::publishMap()
             msg->points.push_back(p);
         }
     }
+    ROS_INFO("F: %d, O: %d, U: %d", numFree, numOcc, numUnknown);
+
     pc_pub.publish(msg);
 }
 
