@@ -3,6 +3,7 @@
 #include <nav_msgs/Odometry.h>
 #include <common/robot.h>
 #include <tf/transform_broadcaster.h>
+#include <visualization_msgs/Marker.h>
 
 //------------------------------------------------------------------------------
 // Members
@@ -11,8 +12,12 @@ double _x,_y,_theta;
 tf::Quaternion _q;
 nav_msgs::Odometry _odom;
 
+visualization_msgs::Marker _robot_marker;
+
 tf::TransformBroadcaster pub_tf;
 ros::Publisher _pub_odom;
+
+ros::Publisher _vis_pub;
 
 //------------------------------------------------------------------------------
 // Methods
@@ -38,6 +43,31 @@ void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
 //------------------------------------------------------------------------------
 // Callbacks
 
+void send_marker(tf::Transform& transform) {
+    _robot_marker.header.frame_id = "robot";
+    _robot_marker.header.stamp = _odom.header.stamp;
+    _robot_marker.ns = "robot";
+    _robot_marker.id = 0;
+    _robot_marker.type = visualization_msgs::Marker::CUBE;
+    _robot_marker.action = visualization_msgs::Marker::ADD;
+    _robot_marker.pose.position.x = _x;
+    _robot_marker.pose.position.y = _y;
+    _robot_marker.pose.position.z = 0;
+    _robot_marker.pose.orientation.x = _q.x();
+    _robot_marker.pose.orientation.y = _q.y();
+    _robot_marker.pose.orientation.z = _q.z();
+    _robot_marker.pose.orientation.w = _q.w();
+    _robot_marker.scale.x = robot::dim::wheel_distance;
+    _robot_marker.scale.y = robot::dim::wheel_distance;
+    _robot_marker.scale.z = robot::dim::robot_height;
+    _robot_marker.color.a = 1.0;
+    _robot_marker.color.r = 0.0;
+    _robot_marker.color.g = 141.0 / 255.0;
+    _robot_marker.color.b = 240.0 / 255.0;
+
+    _vis_pub.publish(_robot_marker);
+}
+
 /**
   * Adapter from http://simreal.com/content/Odometry
   */
@@ -55,17 +85,19 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
 
     pack_pose(_q, _odom);
     _pub_odom.publish(_odom);
+
+    tf::Transform transform;
+    transform.setOrigin(tf::Vector3(_x, _y, 0));
+    transform.setRotation(_q);
+    pub_tf.sendTransform(tf::StampedTransform(transform, _odom.header.stamp, "map", "robot"));
+
+    send_marker(transform);
 }
 
 void connect_callback(const ros::SingleSubscriberPublisher& pub)
 {
     pack_pose(_q,_odom);
     pub.publish(_odom);
-
-    tf::Transform transform;
-    transform.setOrigin(tf::Vector3(_x, _y, 0));
-    transform.setRotation(_q);
-    pub_tf.sendTransform(tf::StampedTransform(transform, _odom.header.stamp, "map", "robot"));
 }
 
 //------------------------------------------------------------------------------
@@ -83,6 +115,8 @@ int main(int argc, char **argv)
 
     ros::Subscriber sub_enc = n.subscribe("/arduino/encoders",10,callback_encoders);
     _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
+
+    _vis_pub = n.advertise<visualization_msgs::Marker>( "visualization_marker", 0 );
 
     ros::spin();
 
