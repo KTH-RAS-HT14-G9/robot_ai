@@ -112,7 +112,7 @@ int main(int argc, char **argv)
 
     _odom.header.frame_id = "map";
     _x = _y = 0;
-    _theta = M_PI/2.0;
+    _theta = 0;
 
     ros::Subscriber sub_enc = n.subscribe("/arduino/encoders",10,callback_encoders);
     _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
