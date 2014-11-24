@@ -77,7 +77,7 @@ void Mapping::updateGrid()
 
 bool Mapping::isReadingValid(double value)
 {
-    return value > 0.0;
+    return value > 0.0 && value < 0.8;
 }
 
 void Mapping::updateFL()
