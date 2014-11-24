@@ -54,7 +54,7 @@ Point2D<int> Mapping::posToCell(Point2D<double> pos)
 {
     int x = round(pos.x*100.0);// + GRID_X_OFFSET;
     int y = round(pos.y*100.0);// + GRID_Y_OFFSET;
-   // ROS_INFO("(%f, %f) ==> (%d, %d)", pos.x, pos.y, x, y);
+    // ROS_INFO("(%f, %f) ==> (%d, %d)", pos.x, pos.y, x, y);
     return Point2D<int>(x,y);
 }
 
@@ -132,23 +132,46 @@ Point2D<double> Mapping::getPointPos(double side_offset, double forward_offset, 
 
 void Mapping::updateFreeCells(Point2D<double> sensor, Point2D<double> obstacle)
 {
-    double k = (sensor.y - obstacle.y)/(sensor.x - obstacle.x);
-    double m = sensor.y - k*sensor.x;
-
-    double min_x = std::min(sensor.x, obstacle.x) + 1.0;
+    double min_x = std::min(sensor.x, obstacle.x);
     double max_x = std::max(sensor.x, obstacle.x);
-    double min_y = std::min(sensor.y, obstacle.y) + 1.0;
+    double min_y = std::min(sensor.y, obstacle.y);
     double max_y = std::max(sensor.y, obstacle.y);
 
-    for(double x = min_x; x < max_x; ++x)
+    double x1 = min_x;
+    double x2 = max_x;
+    double y1 = sensor.x == x1 ? sensor.y : obstacle.y;
+    double y2 = sensor.x == x2 ? sensor.y : obstacle.y;
+    double dx = x2-x1;
+    double dy = y2-y1;
+
+
+  //  ROS_INFO("sensor: %f, %f, obstacle: %f, %f", sensor.x, sensor.y, obstacle.x, obstacle.y);
+ //   ROS_INFO("min x %f, y %f, max x %f, y %f", min_x, min_y, max_x, max_y);
+
+    if(dx < 0.01)
     {
-        for(double y = min_y; y < max_y; ++y)
+        double x = x1;
+        for(double y = min_y; y < max_y; y +=0.01)
         {
             Point2D<int> cell = posToCell(Point2D<double>(x,y));
+      //      ROS_INFO("Marking: (%d,%d)", cell.x, cell.y);
+            updateProbCell(cell, P_FREE);
+            updateOccCell(cell);
+        }
+    } else {
+
+        for(double x = x1; x < x2; x+=0.01)
+        {
+            double y = y1 + dy * (x-x1) / dx;
+            Point2D<int> cell = posToCell(Point2D<double>(x,y));
+        //    ROS_INFO("Marking: (%d,%d)", cell.x, cell.y);
             updateProbCell(cell, P_FREE);
             updateOccCell(cell);
         }
     }
+
+    //ROS_INFO("done");
+   // ros::Duration(10.0).sleep();
 }
 
 void Mapping::updateProbCell(Point2D<int> cell, double p)
