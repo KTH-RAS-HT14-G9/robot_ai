@@ -16,13 +16,13 @@
 using std::vector;
 
 template<class T>
-struct Point2D
+struct Point
 {
     T x;
     T y;
 
-    Point2D() {}
-    Point2D(T x, T y) : x(x), y(y) {}
+    Point() {}
+    Point(T x, T y) : x(x), y(y) {}
 };
 
 class Mapping
@@ -33,21 +33,21 @@ public:
     void odometryCallback(const nav_msgs::Odometry::ConstPtr&);
     void updateGrid();
     void publishMap();
-    void broadcastTransform();
 
 private:
-    void initProbGrid();
-    void initOccGrid();
-    void updateProbCell(Point2D<int>, double);
-    void updateOccCell(Point2D<int>);
-    void updateFreeCells(Point2D<double>, Point2D<double>);
-    Point2D<double> getPointPos(double, double, double);
-    Point2D<int> posToCell(Point2D<double>);
-    void updateFR();
-    void updateFL();
-    void updateBR();
-    void updateBL();
-    bool isReadingValid(double);
+    void markPointsFreeBetween(Point<double> p1, Point<double> p2);
+    void updateIR(Point<double> ir_pos, double ir_reading);
+    void markPointOccupied(Point<double> p);
+    void markPointFree(Point<double> p);
+    Point<int> robotPointToCell(Point<double> p);
+    Point<double> robotToMapTransform(Point<double> p);
+    Point<int> mapPointToCell(Point<double> p);
+    void markProbabilityGrid(Point<int> cell, double log_prob);
+    void updateOccupancyGrid(Point<int>);
+    bool isIRValid(double reading);
+    void initProbabilityGrid();
+    void initOccupancyGrid();
+    void broadcastTransform();
 
     //ros
     ros::NodeHandle handle;
@@ -65,17 +65,16 @@ private:
     ros::Publisher pc_pub;
 
     //odometry
-    Point2D<double> pos;
+    Point<double> pos;
 
     //ir
-    double fl_side, fr_side, bl_side, br_side, l_front, r_front;
+    double fl_ir, fr_ir, bl_ir, br_ir;
 
     //constants
     static const double INVALID_READING;
     static const double MAP_HEIGHT, MAP_WIDTH;
     static const int GRID_HEIGHT, GRID_WIDTH;
     static const double MAP_X_OFFSET, MAP_Y_OFFSET;
-    static const int GRID_X_OFFSET, GRID_Y_OFFSET;
     static const double P_PRIOR, P_OCC, P_FREE;
     static const double FREE_OCCUPIED_THRESHOLD;
 
