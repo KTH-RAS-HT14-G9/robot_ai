@@ -14,7 +14,7 @@ nav_msgs::Odometry _odom;
 
 visualization_msgs::Marker _robot_marker;
 
-tf::TransformBroadcaster pub_tf;
+//tf::TransformBroadcaster pub_tf;
 ros::Publisher _pub_odom;
 
 ros::Publisher _vis_pub;
@@ -73,6 +73,7 @@ void send_marker(tf::Transform& transform) {
   */
 void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
 {
+    static tf::TransformBroadcaster pub_tf;
     double dist_l = (2.0*M_PI*robot::dim::wheel_radius) * (encoders->delta_encoder1 / robot::prop::ticks_per_rev);
     double dist_r = (2.0*M_PI*robot::dim::wheel_radius) * (encoders->delta_encoder2 / robot::prop::ticks_per_rev);
 
