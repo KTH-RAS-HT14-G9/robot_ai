@@ -1,6 +1,6 @@
 <launch>
 
-	<node pkg="tf" type="static_transform_publisher" name="robot_broadcaster" args="0 0 0 0 0 0 1 map robot 100" />
+	<node pkg="tf" type="static_transform_publisher" name="map_broadcaster" args="0 0 0 0 0 0 1 world map 100" />
 
 	<!-- launch ir distance converter -->
 	<node pkg="ir_converter" type="ir_converter" name="ir_converter" />
@@ -11,7 +11,7 @@
 	<!-- launch mapping -->
 	<node pkg="mapping" type="mapping" name="mapping" output="screen"/>
 
-	<!-- launch brain 
-	<node pkg="brain" type="brain.py" name="brain" output="screen"/>-->
+	<!-- launch brain -->
+	<node pkg="brain" type="brain.py" name="brain" output="screen"/>
 
 </launch>

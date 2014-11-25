@@ -37,8 +37,7 @@ public:
     void stopTurnCallback(const std_msgs::Bool::ConstPtr&);
     void updateGrid();
     void publishMap();
-    void broadcastTransform();
-    void waitForTransform();
+    void updateTransform();
 
 private:
     void markPointsFreeBetween(Point<double> p1, Point<double> p2);
@@ -61,7 +60,7 @@ private:
     ros::Subscriber stop_turn_sub;
     ros::Publisher pc_pub;
     tf::TransformListener tf_listener;
-    tf::TransformBroadcaster tf_broadcaster;
+    tf::StampedTransform transform;
 
     vector<vector<double> > prob_grid;
     vector<vector<int> > occ_grid;
