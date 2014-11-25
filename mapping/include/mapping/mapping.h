@@ -37,6 +37,8 @@ public:
     void stopTurnCallback(const std_msgs::Bool::ConstPtr&);
     void updateGrid();
     void publishMap();
+    void broadcastTransform();
+    void waitForTransform();
 
 private:
     void markPointsFreeBetween(Point<double> p1, Point<double> p2);
@@ -51,7 +53,6 @@ private:
     bool isIRValid(double reading);
     void initProbabilityGrid();
     void initOccupancyGrid();
-    void broadcastTransform();
 
     ros::NodeHandle handle;
     ros::Subscriber distance_sub;

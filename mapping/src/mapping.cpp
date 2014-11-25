@@ -38,7 +38,7 @@ Mapping::Mapping() :
 
     initProbabilityGrid();
     initOccupancyGrid();
-    broadcastTransform();
+ //   broadcastTransform();
 }
 
 void Mapping::updateGrid()
@@ -48,37 +48,33 @@ void Mapping::updateGrid()
 
     if(isIRValid(fl_ir))
     {
-        double ir_x_offset = robot::ir::offset_front_left;
-        double ir_y_offset = robot::ir::offset_front_left_forward;
-        Point<double> ir(pos.x + ir_x_offset, pos.y + ir_y_offset);
-        Point<double> obstacle(ir.x, ir.y + fl_ir);
+        double ir_x_offset = robot::ir::offset_front_left_forward;
+        Point<double> ir(ir_x_offset, 0);
+        Point<double> obstacle(ir_x_offset,fl_ir);
         updateIR(ir, obstacle);
     }
 
     if(isIRValid(fr_ir))
     {
-        double ir_x_offset = robot::ir::offset_front_left;
-        double ir_y_offset = -1.0*robot::ir::offset_front_left_forward;
-        Point<double> ir(pos.x + ir_x_offset, pos.y + ir_y_offset);
-        Point<double> obstacle(ir.x, ir.y - fr_ir);
+        double ir_x_offset = robot::ir::offset_front_right_forward;
+        Point<double> ir(ir_x_offset, 0);
+        Point<double> obstacle(ir_x_offset,-fr_ir);
         updateIR(ir, obstacle);
     }
 
     if(isIRValid(bl_ir))
     {
-        double ir_x_offset = -1.0*robot::ir::offset_front_left;
-        double ir_y_offset = robot::ir::offset_front_left_forward;
-        Point<double> ir(pos.x + ir_x_offset, pos.y + ir_y_offset);
-        Point<double> obstacle(ir.x, ir.y + bl_ir);
+        double ir_x_offset = -1.0*robot::ir::offset_rear_left_forward;
+        Point<double> ir(ir_x_offset, 0);
+        Point<double> obstacle(ir_x_offset, bl_ir);
         updateIR(ir, obstacle);
     }
 
     if(isIRValid(br_ir))
     {
-        double ir_x_offset = -1.0*robot::ir::offset_front_left;
-        double ir_y_offset = -1.0*robot::ir::offset_front_left_forward;
-        Point<double> ir(pos.x + ir_x_offset, pos.y + ir_y_offset);
-        Point<double> obstacle(ir.x, ir.y - br_ir);
+        double ir_x_offset = -1.0*robot::ir::offset_rear_right_forward;
+        Point<double> ir(ir_x_offset, 0);
+        Point<double> obstacle(ir_x_offset, -br_ir);
         updateIR(ir, obstacle);
     }
 
@@ -139,14 +135,16 @@ Point<double> Mapping::robotToMapTransform(Point<double> point)
 {
     geometry_msgs::PointStamped robot_point;
     robot_point.header.frame_id = "robot";
-    robot_point.header.stamp = ros::Time();
+    robot_point.header.stamp = ros::Time::now();
     robot_point.point.x = point.x;
     robot_point.point.y = point.y;
     robot_point.point.z = 0.0;
 
     geometry_msgs::PointStamped map_point;
     tf_listener.transformPoint("map", robot_point, map_point);
-    return Point<double>(map_point.point.x+MAP_X_OFFSET, map_point.point.y+MAP_Y_OFFSET);
+    Point<double> res = Point<double>(map_point.point.x + MAP_X_OFFSET, map_point.point.y + MAP_Y_OFFSET);
+    //ROS_INFO("robot x: %f y: %f, map x: %f, y: %f", point.x, point.y, res.x, res.y);
+    return res;
 }
 
 Point<int> Mapping::mapPointToCell(Point<double> pos)
@@ -203,7 +201,7 @@ void Mapping::broadcastTransform()
     tf_broadcaster.sendTransform(
                 tf::StampedTransform(
                     tf::Transform(tf::Quaternion(0, 0, 0, 1), tf::Vector3(0.0, 0.0, 0.0)),
-                    ros::Time::now(),"map", "robot"));
+                    ros::Time(),"map", "robot"));
 }
 
 void Mapping::distanceCallback(const ir_converter::Distance::ConstPtr& distance)
@@ -229,6 +227,12 @@ void Mapping::startTurnCallback(const std_msgs::Float64::ConstPtr & angle)
 void Mapping::stopTurnCallback(const std_msgs::Bool::ConstPtr & var)
 {
     turning = false;
+}
+
+void Mapping::waitForTransform()
+{
+    tf_listener.waitForTransform("robot", "map",
+                                  ros::Time::now(), ros::Duration(3.0));
 }
 
 void Mapping::publishMap()
@@ -276,8 +280,10 @@ int main(int argc, char **argv)
     int counter = 0;
     while(ros::ok())
     {
-        ++counter;
 
+        mapping.waitForTransform();
+        ++counter;
+      //  mapping.broadcastTransform();
         mapping.updateGrid();
         if(counter % 100 == 0)
             mapping.publishMap();
