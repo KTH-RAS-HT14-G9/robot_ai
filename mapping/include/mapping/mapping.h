@@ -12,6 +12,8 @@
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/pcl_base.h>
+#include <std_msgs/Float64.h>
+#include <std_msgs/Bool.h>
 
 using std::vector;
 
@@ -31,12 +33,14 @@ public:
     Mapping();
     void distanceCallback(const ir_converter::Distance::ConstPtr&);
     void odometryCallback(const nav_msgs::Odometry::ConstPtr&);
+    void startTurnCallback(const std_msgs::Float64::ConstPtr&);
+    void stopTurnCallback(const std_msgs::Bool::ConstPtr&);
     void updateGrid();
     void publishMap();
 
 private:
     void markPointsFreeBetween(Point<double> p1, Point<double> p2);
-    void updateIR(Point<double> ir_pos, double ir_reading);
+    void updateIR(Point<double> ir, Point<double> obstacle);
     void markPointOccupied(Point<double> p);
     void markPointFree(Point<double> p);
     Point<int> robotPointToCell(Point<double> p);
@@ -49,28 +53,21 @@ private:
     void initOccupancyGrid();
     void broadcastTransform();
 
-    //ros
     ros::NodeHandle handle;
     ros::Subscriber distance_sub;
     ros::Subscriber odometry_sub;
-
-    //tf
+    ros::Subscriber start_turn_sub;
+    ros::Subscriber stop_turn_sub;
+    ros::Publisher pc_pub;
     tf::TransformListener tf_listener;
     tf::TransformBroadcaster tf_broadcaster;
 
-    // map
     vector<vector<double> > prob_grid;
     vector<vector<int> > occ_grid;
-
-    ros::Publisher pc_pub;
-
-    //odometry
+    bool turning;
     Point<double> pos;
-
-    //ir
     double fl_ir, fr_ir, bl_ir, br_ir;
 
-    //constants
     static const double INVALID_READING;
     static const double MAP_HEIGHT, MAP_WIDTH;
     static const int GRID_HEIGHT, GRID_WIDTH;

@@ -27,12 +27,13 @@ typedef pcl::PointXYZI PCPoint;
 Mapping::Mapping() :
     fl_ir(INVALID_READING), fr_ir(INVALID_READING),
     bl_ir(INVALID_READING), br_ir(INVALID_READING),
-    pos(Point<double>(0.0,0.0))
+    pos(Point<double>(0.0,0.0)), turning(false)
 {
     handle = ros::NodeHandle("");
-    distance_sub = handle.subscribe("/perception/ir/distance", 10, &Mapping::distanceCallback, this);
-    odometry_sub = handle.subscribe("/pose/odometry/", 10, &Mapping::odometryCallback, this);
-
+    distance_sub = handle.subscribe("/perception/ir/distance", 1, &Mapping::distanceCallback, this);
+    odometry_sub = handle.subscribe("/pose/odometry/", 1, &Mapping::odometryCallback, this);
+    start_turn_sub = handle.subscribe("/controller/turn/angle", 1, &Mapping::startTurnCallback, this);
+    stop_turn_sub = handle.subscribe("/controller/turn/done", 1, &Mapping::stopTurnCallback, this);
     pc_pub = handle.advertise<PointCloud>("/mapping/point_cloud", 1);
 
     initProbabilityGrid();
@@ -42,32 +43,43 @@ Mapping::Mapping() :
 
 void Mapping::updateGrid()
 {
+    //if(turning)
+        //return;
+
     if(isIRValid(fl_ir))
     {
-        double ir_x_offset = -1.0*robot::ir::offset_front_left;
+        double ir_x_offset = robot::ir::offset_front_left;
         double ir_y_offset = robot::ir::offset_front_left_forward;
-        updateIR(Point<double>(pos.x + ir_x_offset, pos.y + ir_y_offset), fl_ir);
+        Point<double> ir(pos.x + ir_x_offset, pos.y + ir_y_offset);
+        Point<double> obstacle(ir.x, ir.y + fl_ir);
+        updateIR(ir, obstacle);
     }
 
     if(isIRValid(fr_ir))
     {
         double ir_x_offset = robot::ir::offset_front_left;
-        double ir_y_offset = robot::ir::offset_front_left_forward;
-        updateIR(Point<double>(pos.x + ir_x_offset, pos.y + ir_y_offset), fr_ir);
+        double ir_y_offset = -1.0*robot::ir::offset_front_left_forward;
+        Point<double> ir(pos.x + ir_x_offset, pos.y + ir_y_offset);
+        Point<double> obstacle(ir.x, ir.y - fr_ir);
+        updateIR(ir, obstacle);
     }
 
     if(isIRValid(bl_ir))
     {
         double ir_x_offset = -1.0*robot::ir::offset_front_left;
-        double ir_y_offset = -1.0*robot::ir::offset_front_left_forward;
-        updateIR(Point<double>(pos.x + ir_x_offset, pos.y + ir_y_offset), bl_ir);
+        double ir_y_offset = robot::ir::offset_front_left_forward;
+        Point<double> ir(pos.x + ir_x_offset, pos.y + ir_y_offset);
+        Point<double> obstacle(ir.x, ir.y + bl_ir);
+        updateIR(ir, obstacle);
     }
 
     if(isIRValid(br_ir))
     {
         double ir_x_offset = -1.0*robot::ir::offset_front_left;
-        double ir_y_offset = robot::ir::offset_front_left_forward;
-        updateIR(Point<double>(pos.x + ir_x_offset, pos.y + ir_y_offset), br_ir);
+        double ir_y_offset = -1.0*robot::ir::offset_front_left_forward;
+        Point<double> ir(pos.x + ir_x_offset, pos.y + ir_y_offset);
+        Point<double> obstacle(ir.x, ir.y - br_ir);
+        updateIR(ir, obstacle);
     }
 
     //  TODO update cells robot is at to free
@@ -97,11 +109,10 @@ void Mapping::markPointsFreeBetween(Point<double> p1, Point<double> p2)
     }
 }
 
-void Mapping::updateIR(Point<double> ir_pos, double ir_reading)
+void Mapping::updateIR(Point<double> ir, Point<double> obstacle)
 {
-    Point<double> obstacle_pos = Point<double>(ir_pos.x + ir_reading , ir_pos.y);
-    markPointOccupied(obstacle_pos);
-    markPointsFreeBetween(ir_pos, obstacle_pos);
+    markPointOccupied(obstacle); // only seems to work on the right
+    markPointsFreeBetween(ir, obstacle); // ^__ probably overwritten to free here
 }
 
 void Mapping::markPointOccupied(Point<double> point)
@@ -147,17 +158,17 @@ Point<int> Mapping::mapPointToCell(Point<double> pos)
 
 void Mapping::markProbabilityGrid(Point<int> cell, double log_prob)
 {
-    prob_grid[cell.x][cell.y] += log_prob - P_PRIOR;
+    prob_grid[cell.y][cell.x] += log_prob - P_PRIOR;
 }
 
 void Mapping::updateOccupancyGrid(Point<int> cell)
 {
-    if(prob_grid[cell.x][cell.y] > FREE_OCCUPIED_THRESHOLD)
-        occ_grid[cell.x][cell.y] = OCCUPIED;
-    else if(prob_grid[cell.x][cell.y] < FREE_OCCUPIED_THRESHOLD)
-        occ_grid[cell.x][cell.y] = FREE;
+    if(prob_grid[cell.y][cell.x] > FREE_OCCUPIED_THRESHOLD)
+        occ_grid[cell.y][cell.x] = OCCUPIED;
+    else if(prob_grid[cell.y][cell.x] < FREE_OCCUPIED_THRESHOLD)
+        occ_grid[cell.y][cell.x] = FREE;
     else
-        occ_grid[cell.x][cell.y] = UNKNOWN;
+        occ_grid[cell.y][cell.x] = UNKNOWN;
 }
 
 bool Mapping::isIRValid(double value)
@@ -167,24 +178,24 @@ bool Mapping::isIRValid(double value)
 
 void Mapping::initProbabilityGrid()
 {
-    prob_grid.resize(GRID_WIDTH);
-    for(int x = 0; x < GRID_WIDTH; ++x)
-        prob_grid[x].resize(GRID_HEIGHT);
+    prob_grid.resize(GRID_HEIGHT);
+    for(int i = 0; i < GRID_HEIGHT; ++i)
+        prob_grid[i].resize(GRID_WIDTH);
 
-    for(int x = 0; x < GRID_WIDTH; ++x)
-        for(int y = 0; y < GRID_HEIGHT; ++y)
-            prob_grid[x][y] = P_PRIOR;
+    for(int i = 0; i < GRID_HEIGHT; ++i)
+        for(int j = 0; j < GRID_WIDTH; ++j)
+            prob_grid[i][j] = P_PRIOR;
 }
 
 void Mapping::initOccupancyGrid()
 {
-    occ_grid.resize(GRID_WIDTH);
-    for(int x = 0; x < GRID_WIDTH; ++x)
-        occ_grid[x].resize(GRID_HEIGHT);
+    occ_grid.resize(GRID_HEIGHT);
+    for(int i = 0; i < GRID_HEIGHT; ++i)
+        occ_grid[i].resize(GRID_WIDTH);
 
-    for(int x = 0; x < GRID_WIDTH; ++x)
-        for(int y = 0; y < GRID_HEIGHT; ++y)
-            occ_grid[x][y] = UNKNOWN;
+    for(int i = 0; i < GRID_HEIGHT; ++i)
+        for(int j = 0; j < GRID_WIDTH; ++j)
+            occ_grid[i][j] = UNKNOWN;
 }
 
 void Mapping::broadcastTransform()
@@ -210,6 +221,16 @@ void Mapping::odometryCallback(const nav_msgs::Odometry::ConstPtr& odom)
     pos = Point<double>(x,y);
 }
 
+void Mapping::startTurnCallback(const std_msgs::Float64::ConstPtr & angle)
+{
+    turning = true;
+}
+
+void Mapping::stopTurnCallback(const std_msgs::Bool::ConstPtr & var)
+{
+    turning = false;
+}
+
 void Mapping::publishMap()
 {
     PointCloud::Ptr msg (new PointCloud);
@@ -221,11 +242,11 @@ void Mapping::publishMap()
     int numUnknown = 0;
     int numOcc = 0;
 
-    for(int x = 0; x < GRID_WIDTH; ++x)
+    for(int i = 0; i < GRID_HEIGHT; ++i)
     {
-        for(int y = 0; y < GRID_HEIGHT; ++y)
+        for(int j = 0; j < GRID_WIDTH; ++j)
         {
-            int cell = occ_grid[x][y];
+            int cell = occ_grid[i][j];
 
             if(cell == OCCUPIED)
                 ++numOcc;
@@ -234,11 +255,11 @@ void Mapping::publishMap()
             else if(cell == UNKNOWN)
                 ++numUnknown;
 
-            double i = (cell == FREE) ? 0.0 : (cell == OCCUPIED) ? 1.0 : 0.5;
+            double intensity = (cell == FREE) ? 0.0 : (cell == OCCUPIED) ? 1.0 : 0.5;
 
-            PCPoint p(i);
-            p.x = (double) x/100.0;
-            p.y = (double) y/100.0;
+            PCPoint p(intensity);
+            p.x = (double) j/100.0;
+            p.y = (double) i/100.0;
             msg->points.push_back(p);
         }
     }
