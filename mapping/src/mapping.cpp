@@ -15,9 +15,9 @@ const double Mapping::P_FREE  = log(0.35);
 const double Mapping::FREE_OCCUPIED_THRESHOLD = log(0.5);
 
 const double Mapping::INVALID_READING = -1.0;
-const int Mapping::UNKNOWN = -1;
+const int Mapping::UNKNOWN = 50;
 const int Mapping::FREE = 0;
-const int Mapping::OCCUPIED = 1;
+const int Mapping::OCCUPIED = 100;
 const int Mapping::BLUE_CUBE = 2;
 const int Mapping::RED_SPHERE = 3;
 
@@ -38,13 +38,12 @@ Mapping::Mapping() :
 
     initProbabilityGrid();
     initOccupancyGrid();
-    //   broadcastTransform();
 }
 
 void Mapping::updateGrid()
 {
-    //if(turning)
-    //return;
+    if(turning)
+        return;
 
     if(isIRValid(fl_ir))
     {
@@ -108,7 +107,7 @@ void Mapping::markPointsFreeBetween(Point<double> p1, Point<double> p2)
 void Mapping::updateIR(Point<double> ir, Point<double> obstacle)
 {
     markPointOccupied(obstacle);
-   // markPointsFreeBetween(ir, obstacle); // left occupied cells get seem overwritten as free
+    markPointsFreeBetween(ir, obstacle); // left occupied cells get seem overwritten as free
 }
 
 void Mapping::markPointOccupied(Point<double> point)
@@ -133,18 +132,17 @@ Point<int> Mapping::robotPointToCell(Point<double> point)
 
 Point<double> Mapping::robotToMapTransform(Point<double> point)
 {
-    geometry_msgs::PointStamped robot_point;
-    robot_point.header.frame_id = "robot";
-    robot_point.header.stamp = ros::Time::now();
-    robot_point.point.x = point.x;
-    robot_point.point.y = point.y;
-    robot_point.point.z = 0.0;
+    geometry_msgs::PointStamped robot_point_msg;
+    robot_point_msg.header.frame_id = "robot";
+    robot_point_msg.header.stamp = ros::Time::now();
+    robot_point_msg.point.x = point.x;
+    robot_point_msg.point.y = point.y;
+    robot_point_msg.point.z = 0.0;
+    tf::Stamped<tf::Point> robot_point;
+    tf::pointStampedMsgToTF(robot_point_msg, robot_point);
+    tf::Vector3 map_point = transform*robot_point;
 
-    waitForTransform();
-    geometry_msgs::PointStamped map_point;
-    tf_listener.transformPoint("map", robot_point, map_point);
-    Point<double> res = Point<double>(map_point.point.x + MAP_X_OFFSET, map_point.point.y + MAP_Y_OFFSET);
-    //  ROS_INFO("robot x: %f y: %f, map x: %f, y: %f -- pos.x %f pos.y %f", point.x, point.y, res.x, res.y, pos.x, pos.y);
+    Point<double> res = Point<double>(map_point.getX() + MAP_X_OFFSET, map_point.getY() + MAP_Y_OFFSET);
     return res;
 }
 
@@ -197,14 +195,6 @@ void Mapping::initOccupancyGrid()
             occ_grid[i][j] = UNKNOWN;
 }
 
-void Mapping::broadcastTransform()
-{
-    tf_broadcaster.sendTransform(
-                tf::StampedTransform(
-                    tf::Transform(tf::Quaternion(0, 0, 0, 1), tf::Vector3(0.0, 0.0, 0.0)),
-                    ros::Time(),"map", "robot"));
-}
-
 void Mapping::distanceCallback(const ir_converter::Distance::ConstPtr& distance)
 {   
     fl_ir = distance->fl_side;
@@ -230,10 +220,14 @@ void Mapping::stopTurnCallback(const std_msgs::Bool::ConstPtr & var)
     turning = false;
 }
 
-void Mapping::waitForTransform()
+void Mapping::updateTransform()
 {
-    tf_listener.waitForTransform("map", "robot",
-                                 ros::Time::now(), ros::Duration(3.0));
+    try {
+        tf_listener.waitForTransform("map", "robot", ros::Time(0), ros::Duration(10.0) );
+        tf_listener.lookupTransform("map", "robot", ros::Time(0), transform);
+    } catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what());
+    }
 }
 
 void Mapping::publishMap()
@@ -281,10 +275,8 @@ int main(int argc, char **argv)
     int counter = 0;
     while(ros::ok())
     {
-
-        mapping.waitForTransform();
+        mapping.updateTransform();
         ++counter;
-        // mapping.broadcastTransform();
         mapping.updateGrid();
         if(counter % 10 == 0)
             mapping.publishMap();
