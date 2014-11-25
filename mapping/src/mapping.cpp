@@ -38,13 +38,13 @@ Mapping::Mapping() :
 
     initProbabilityGrid();
     initOccupancyGrid();
- //   broadcastTransform();
+    //   broadcastTransform();
 }
 
 void Mapping::updateGrid()
 {
     //if(turning)
-        //return;
+    //return;
 
     if(isIRValid(fl_ir))
     {
@@ -107,8 +107,8 @@ void Mapping::markPointsFreeBetween(Point<double> p1, Point<double> p2)
 
 void Mapping::updateIR(Point<double> ir, Point<double> obstacle)
 {
-    markPointOccupied(obstacle); // only seems to work on the right
-    markPointsFreeBetween(ir, obstacle); // ^__ probably overwritten to free here
+    markPointOccupied(obstacle);
+   // markPointsFreeBetween(ir, obstacle); // left occupied cells get seem overwritten as free
 }
 
 void Mapping::markPointOccupied(Point<double> point)
@@ -140,17 +140,18 @@ Point<double> Mapping::robotToMapTransform(Point<double> point)
     robot_point.point.y = point.y;
     robot_point.point.z = 0.0;
 
+    waitForTransform();
     geometry_msgs::PointStamped map_point;
     tf_listener.transformPoint("map", robot_point, map_point);
     Point<double> res = Point<double>(map_point.point.x + MAP_X_OFFSET, map_point.point.y + MAP_Y_OFFSET);
-    //ROS_INFO("robot x: %f y: %f, map x: %f, y: %f", point.x, point.y, res.x, res.y);
+    //  ROS_INFO("robot x: %f y: %f, map x: %f, y: %f -- pos.x %f pos.y %f", point.x, point.y, res.x, res.y, pos.x, pos.y);
     return res;
 }
 
-Point<int> Mapping::mapPointToCell(Point<double> pos)
+Point<int> Mapping::mapPointToCell(Point<double> point)
 {
-    int x = round(pos.x*100.0);
-    int y = round(pos.y*100.0);
+    int x = round(point.x*100.0);
+    int y = round(point.y*100.0);
     return Point<int>(x,y);
 }
 
@@ -231,8 +232,8 @@ void Mapping::stopTurnCallback(const std_msgs::Bool::ConstPtr & var)
 
 void Mapping::waitForTransform()
 {
-    tf_listener.waitForTransform("robot", "map",
-                                  ros::Time::now(), ros::Duration(3.0));
+    tf_listener.waitForTransform("map", "robot",
+                                 ros::Time::now(), ros::Duration(3.0));
 }
 
 void Mapping::publishMap()
@@ -283,9 +284,9 @@ int main(int argc, char **argv)
 
         mapping.waitForTransform();
         ++counter;
-      //  mapping.broadcastTransform();
+        // mapping.broadcastTransform();
         mapping.updateGrid();
-        if(counter % 100 == 0)
+        if(counter % 10 == 0)
             mapping.publishMap();
         ros::spinOnce();
         loop_rate.sleep();
