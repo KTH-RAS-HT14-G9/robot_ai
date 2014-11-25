@@ -9,8 +9,8 @@ const double Mapping::MAP_X_OFFSET = MAP_WIDTH/2.0;
 const double Mapping::MAP_Y_OFFSET = MAP_HEIGHT/2.0;
 
 const double Mapping::P_PRIOR = log(0.5);
-const double Mapping::P_OCC = log(0.7);
-const double Mapping::P_FREE  = log(0.35);
+const double Mapping::P_OCC = log(0.9); //log(0.7);
+const double Mapping::P_FREE  = log(0.4);//log(0.35);
 
 const double Mapping::FREE_OCCUPIED_THRESHOLD = log(0.5);
 
@@ -42,8 +42,8 @@ Mapping::Mapping() :
 
 void Mapping::updateGrid()
 {
-    if(turning)
-        return;
+   // if(turning)
+   //     return;
 
     if(isIRValid(fl_ir))
     {
@@ -76,8 +76,6 @@ void Mapping::updateGrid()
         Point<double> obstacle(ir_x_offset, -br_ir);
         updateIR(ir, obstacle);
     }
-
-    //  TODO update cells robot is at to free
 }
 
 void Mapping::markPointsFreeBetween(Point<double> p1, Point<double> p2)
@@ -107,14 +105,24 @@ void Mapping::markPointsFreeBetween(Point<double> p1, Point<double> p2)
 void Mapping::updateIR(Point<double> ir, Point<double> obstacle)
 {
     markPointOccupied(obstacle);
-    markPointsFreeBetween(ir, obstacle); // left occupied cells get seem overwritten as free
+    markPointsFreeBetween(ir, obstacle);
 }
 
 void Mapping::markPointOccupied(Point<double> point)
 {
     Point<int> cell = robotPointToCell(point);
-    markProbabilityGrid(cell, P_OCC);
-    updateOccupancyGrid(cell);
+    int x = cell.x;
+    int y = cell.y;
+    for(int i = x-1; i < x+1; ++i)
+    {
+        for(int j = y-1; j < y+1; ++j)
+        {
+            Point<int> c(i, j);
+            markProbabilityGrid(c, P_OCC);
+            updateOccupancyGrid(c);
+        }
+    }
+
 }
 
 void Mapping::markPointFree(Point<double> point)
@@ -170,7 +178,7 @@ void Mapping::updateOccupancyGrid(Point<int> cell)
 
 bool Mapping::isIRValid(double value)
 {
-    return value > 0.0 && value < 0.8;
+    return value > 0.0 && value < 0.5;
 }
 
 void Mapping::initProbabilityGrid()
@@ -271,14 +279,14 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "mapping");
     Mapping mapping;
-    ros::Rate loop_rate(10); // what should this be?
+    ros::Rate loop_rate(20); // what should this be?
     int counter = 0;
     while(ros::ok())
     {
         mapping.updateTransform();
         ++counter;
         mapping.updateGrid();
-        if(counter % 10 == 0)
+        if(counter % 20 == 0)
             mapping.publishMap();
         ros::spinOnce();
         loop_rate.sleep();
