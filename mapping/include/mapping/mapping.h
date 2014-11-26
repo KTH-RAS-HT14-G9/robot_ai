@@ -5,6 +5,9 @@
 #include <nav_msgs/Odometry.h>
 #include <ir_converter/Distance.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/OccupancyGrid.h>
+#include <nav_msgs/MapMetaData.h>
+#include <std_msgs/Header.h>
 #include <common/robot.h>
 #include <math.h>
 #include <tf/transform_listener.h>
@@ -71,7 +74,9 @@ private:
     common::vision::SegmentedPlane::ArrayPtr wall_planes;
 
     vector<vector<double> > prob_grid;
-    vector<vector<int> > occ_grid;
+    //vector<vector<int> > occ_grid;
+    nav_msgs::OccupancyGrid grid; //added
+    //vector<char> occ_grid;
     bool turning;
     Point<double> pos;
     double fl_ir_reading, fr_ir_reading, bl_ir_reading, br_ir_reading;

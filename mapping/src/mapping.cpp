@@ -38,10 +38,19 @@ Mapping::Mapping() :
     odometry_sub = handle.subscribe("/pose/odometry/", 1, &Mapping::odometryCallback, this);
     start_turn_sub = handle.subscribe("/controller/turn/angle", 1, &Mapping::startTurnCallback, this);
     stop_turn_sub = handle.subscribe("/controller/turn/done", 1, &Mapping::stopTurnCallback, this);
-    wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
+     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
    // object_sub = handle.subscribe("/vision/object/position", 1, &Mapping::objectDetectedCallback, this);
-    pc_pub = handle.advertise<PointCloud>("/mapping/point_cloud", 1);
+    pc_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
+    
+    
+    grid.header.frame_id = "map";
 
+    nav_msgs::MapMetaData metaData;
+    metaData.resolution = 0.01;
+    metaData.width = GRID_WIDTH;
+    metaData.height = GRID_HEIGHT;
+    grid.info = metaData;
+   
     initProbabilityGrid();
     initOccupancyGrid();
 }
@@ -165,12 +174,13 @@ void Mapping::markProbabilityGrid(Point<int> cell, double log_prob)
 
 void Mapping::updateOccupancyGrid(Point<int> cell)
 {
+    int pos = cell.x*GRID_WIDTH + cell.y;
     if(prob_grid[cell.y][cell.x] > FREE_OCCUPIED_THRESHOLD)
-        occ_grid[cell.y][cell.x] = OCCUPIED;
+        grid.data[pos] = OCCUPIED;
     else if(prob_grid[cell.y][cell.x] < FREE_OCCUPIED_THRESHOLD)
-        occ_grid[cell.y][cell.x] = FREE;
+        grid.data[pos] = FREE;
     else
-        occ_grid[cell.y][cell.x] = UNKNOWN;
+        grid.data[pos] = UNKNOWN;
 }
 
 bool Mapping::isIRValid(double value)
@@ -191,13 +201,9 @@ void Mapping::initProbabilityGrid()
 
 void Mapping::initOccupancyGrid()
 {
-    occ_grid.resize(GRID_HEIGHT);
-    for(int i = 0; i < GRID_HEIGHT; ++i)
-        occ_grid[i].resize(GRID_WIDTH);
-
-    for(int i = 0; i < GRID_HEIGHT; ++i)
-        for(int j = 0; j < GRID_WIDTH; ++j)
-            occ_grid[i][j] = UNKNOWN;
+    grid.data.resize(GRID_WIDTH*GRID_HEIGHT);
+    for(int i = 0; i < GRID_HEIGHT*GRID_WIDTH; ++i)
+            grid.data[i] = UNKNOWN;
 }
 
 void Mapping::distanceCallback(const ir_converter::Distance::ConstPtr& distance)
@@ -244,39 +250,7 @@ void Mapping::wallDetectedCallback(const vision_msgs::Planes::ConstPtr & msg)
 
 void Mapping::publishMap()
 {
-    PointCloud::Ptr msg (new PointCloud);
-    msg->header.frame_id = "map";
-    msg->height = GRID_HEIGHT;
-    msg->width = GRID_WIDTH;
-
-    int numFree = 0;
-    int numUnknown = 0;
-    int numOcc = 0;
-
-    for(int i = 0; i < GRID_HEIGHT; ++i)
-    {
-        for(int j = 0; j < GRID_WIDTH; ++j)
-        {
-            int cell = occ_grid[i][j];
-
-            if(cell == OCCUPIED)
-                ++numOcc;
-            else if(cell == FREE)
-                ++numFree;
-            else if(cell == UNKNOWN)
-                ++numUnknown;
-
-            double intensity = (cell == FREE) ? 0.0 : (cell == OCCUPIED) ? 1.0 : 0.5;
-
-            PCPoint p(intensity);
-            p.x = (double) j/100.0;
-            p.y = (double) i/100.0;
-            msg->points.push_back(p);
-        }
-    }
-    ROS_INFO("F: %d, O: %d, U: %d", numFree, numOcc, numUnknown);
-
-    pc_pub.publish(msg);
+    pc_pub.publish(grid);
 }
 
 int main(int argc, char **argv)
@@ -284,6 +258,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "mapping");
     Mapping mapping;
     ros::Rate loop_rate(20);
+
     int counter = 0;
     while(ros::ok())
     {
