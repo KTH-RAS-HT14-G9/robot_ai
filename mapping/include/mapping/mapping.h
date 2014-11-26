@@ -14,6 +14,7 @@
 #include <pcl/pcl_base.h>
 #include <std_msgs/Float64.h>
 #include <std_msgs/Bool.h>
+#include <common/segmented_plane.h>
 
 using std::vector;
 
@@ -35,6 +36,8 @@ public:
     void odometryCallback(const nav_msgs::Odometry::ConstPtr&);
     void startTurnCallback(const std_msgs::Float64::ConstPtr&);
     void stopTurnCallback(const std_msgs::Bool::ConstPtr&);
+    void wallDetectedCallback(const vision_msgs::Planes::ConstPtr&);
+    //void objectDetectedCallback(const );
     void updateGrid();
     void publishMap();
     void updateTransform();
@@ -52,15 +55,20 @@ private:
     bool isIRValid(double reading);
     void initProbabilityGrid();
     void initOccupancyGrid();
+    void updateWalls();
 
     ros::NodeHandle handle;
     ros::Subscriber distance_sub;
     ros::Subscriber odometry_sub;
     ros::Subscriber start_turn_sub;
     ros::Subscriber stop_turn_sub;
+    ros::Subscriber wall_sub;
+    ros::Subscriber object_sub;
     ros::Publisher pc_pub;
     tf::TransformListener tf_listener;
     tf::StampedTransform transform;
+
+    common::vision::SegmentedPlane::ArrayPtr wall_planes;
 
     vector<vector<double> > prob_grid;
     vector<vector<int> > occ_grid;
@@ -75,7 +83,7 @@ private:
     static const double P_PRIOR, P_OCC, P_FREE;
     static const double FREE_OCCUPIED_THRESHOLD;
 
-    static const double MAX_IR_DIST;
+    static const double MAX_IR_DIST, MIN_IR_DIST;
 
     static const int UNKNOWN, FREE, OCCUPIED;
     static const int BLUE_CUBE;
