@@ -129,6 +129,8 @@ class RecognizingObject(smach.State):
         global recognizing_done, object_detected
         
         if recognizing_done:
+            StartFollowWall()
+            StartGoForward()
             recognizing_done = False
             object_detected = False
             rospy.loginfo("RECOGNIZING ==> OBSTACLE_DETECTED")
