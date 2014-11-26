@@ -5,6 +5,9 @@
 #include <nav_msgs/Odometry.h>
 #include <ir_converter/Distance.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/OccupancyGrid.h>
+#include <nav_msgs/MapMetaData.h>
+#include <std_msgs/Header.h>
 #include <common/robot.h>
 #include <math.h>
 #include <tf/transform_listener.h>
@@ -63,7 +66,9 @@ private:
     tf::StampedTransform transform;
 
     vector<vector<double> > prob_grid;
-    vector<vector<int> > occ_grid;
+    //vector<vector<int> > occ_grid;
+    nav_msgs::OccupancyGrid grid; //added
+    //vector<char> occ_grid;
     bool turning;
     Point<double> pos;
     double fl_ir_reading, fr_ir_reading, bl_ir_reading, br_ir_reading;
@@ -75,7 +80,7 @@ private:
     static const double P_PRIOR, P_OCC, P_FREE;
     static const double FREE_OCCUPIED_THRESHOLD;
 
-    static const double MAX_IR_DIST;
+    static const double MAX_IR_DIST, MIN_IR_DIST;
 
     static const int UNKNOWN, FREE, OCCUPIED;
     static const int BLUE_CUBE;
