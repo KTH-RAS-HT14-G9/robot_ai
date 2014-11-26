@@ -67,16 +67,14 @@ private:
     ros::Subscriber stop_turn_sub;
     ros::Subscriber wall_sub;
     ros::Subscriber object_sub;
-    ros::Publisher pc_pub;
+    ros::Publisher map_pub;
     tf::TransformListener tf_listener;
     tf::StampedTransform transform;
 
     common::vision::SegmentedPlane::ArrayPtr wall_planes;
 
     vector<vector<double> > prob_grid;
-    //vector<vector<int> > occ_grid;
-    nav_msgs::OccupancyGrid grid; //added
-    //vector<char> occ_grid;
+    nav_msgs::OccupancyGrid occupancy_grid;
     bool turning;
     Point<double> pos;
     double fl_ir_reading, fr_ir_reading, bl_ir_reading, br_ir_reading;
