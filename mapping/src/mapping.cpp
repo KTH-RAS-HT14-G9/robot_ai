@@ -40,16 +40,20 @@ Mapping::Mapping() :
     stop_turn_sub = handle.subscribe("/controller/turn/done", 1, &Mapping::stopTurnCallback, this);
      wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
    // object_sub = handle.subscribe("/vision/object/position", 1, &Mapping::objectDetectedCallback, this);
-    pc_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
+    map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
     
-    
-    grid.header.frame_id = "map";
-
+    occupancy_grid.header.frame_id = "world";
     nav_msgs::MapMetaData metaData;
     metaData.resolution = 0.01;
     metaData.width = GRID_WIDTH;
     metaData.height = GRID_HEIGHT;
-    grid.info = metaData;
+    metaData.origin.position.x = -MAP_X_OFFSET;
+    metaData.origin.position.y = -MAP_Y_OFFSET;
+    metaData.origin.orientation.x = 180.0;
+    metaData.origin.orientation.y = 180.0;
+ //   metaData.origin.orientation.y = 180.0;
+   // metaData.origin.orientation.w = 180.0;
+    occupancy_grid.info = metaData;
    
     initProbabilityGrid();
     initOccupancyGrid();
@@ -176,11 +180,11 @@ void Mapping::updateOccupancyGrid(Point<int> cell)
 {
     int pos = cell.x*GRID_WIDTH + cell.y;
     if(prob_grid[cell.y][cell.x] > FREE_OCCUPIED_THRESHOLD)
-        grid.data[pos] = OCCUPIED;
+        occupancy_grid.data[pos] = OCCUPIED;
     else if(prob_grid[cell.y][cell.x] < FREE_OCCUPIED_THRESHOLD)
-        grid.data[pos] = FREE;
+        occupancy_grid.data[pos] = FREE;
     else
-        grid.data[pos] = UNKNOWN;
+        occupancy_grid.data[pos] = UNKNOWN;
 }
 
 bool Mapping::isIRValid(double value)
@@ -201,9 +205,9 @@ void Mapping::initProbabilityGrid()
 
 void Mapping::initOccupancyGrid()
 {
-    grid.data.resize(GRID_WIDTH*GRID_HEIGHT);
+    occupancy_grid.data.resize(GRID_WIDTH*GRID_HEIGHT);
     for(int i = 0; i < GRID_HEIGHT*GRID_WIDTH; ++i)
-            grid.data[i] = UNKNOWN;
+            occupancy_grid.data[i] = UNKNOWN;
 }
 
 void Mapping::distanceCallback(const ir_converter::Distance::ConstPtr& distance)
@@ -250,7 +254,7 @@ void Mapping::wallDetectedCallback(const vision_msgs::Planes::ConstPtr & msg)
 
 void Mapping::publishMap()
 {
-    pc_pub.publish(grid);
+    map_pub.publish(occupancy_grid);
 }
 
 int main(int argc, char **argv)
@@ -265,7 +269,7 @@ int main(int argc, char **argv)
         mapping.updateTransform();
         ++counter;
         mapping.updateGrid();
-        if(counter % 20 == 0)
+        if(counter % 10 == 0)
             mapping.publishMap();
         ros::spinOnce();
         loop_rate.sleep();
