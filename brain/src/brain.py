@@ -44,7 +44,7 @@ class GoForward(smach.State):
     def execute(self, userdata):
         global stopping_done
         if ObstacleAhead():
-            if not go_forward and not following_wall:
+            if not go_forward:
                 stopping_done = True
             StopGoForward()
             StopFollowWall()
