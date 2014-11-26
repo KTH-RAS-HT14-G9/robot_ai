@@ -14,11 +14,6 @@ nav_msgs::Odometry _odom;
 
 visualization_msgs::Marker _robot_marker;
 
-//tf::TransformBroadcaster pub_tf;
-ros::Publisher _pub_odom;
-
-ros::Publisher _vis_pub;
-
 //------------------------------------------------------------------------------
 // Methods
 
@@ -44,6 +39,10 @@ void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
 // Callbacks
 
 void send_marker(tf::Transform& transform) {
+    static ros::Publisher _vis_pub;
+
+
+    visualization_msgs::Marker _robot_marker;
     _robot_marker.header.frame_id = "robot";
     _robot_marker.header.stamp = _odom.header.stamp;
     _robot_marker.ns = "robot";
