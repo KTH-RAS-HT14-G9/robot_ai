@@ -134,8 +134,6 @@ class RecognizingObject(smach.State):
             rospy.loginfo("RECOGNIZING ==> OBSTACLE_DETECTED")
             return 'obstacle_detected'       
         else:
-            StopGoForward()
-            StopFollowWall()
             return 'recognizing'
 
 ######################## FUNCTIONS #########################
