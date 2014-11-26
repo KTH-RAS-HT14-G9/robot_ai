@@ -12,12 +12,8 @@ double _x,_y,_theta;
 tf::Quaternion _q;
 nav_msgs::Odometry _odom;
 
-visualization_msgs::Marker _robot_marker;
-
-//tf::TransformBroadcaster pub_tf;
 ros::Publisher _pub_odom;
-
-ros::Publisher _vis_pub;
+ros::Publisher _pub_viz;
 
 //------------------------------------------------------------------------------
 // Methods
@@ -44,6 +40,7 @@ void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
 // Callbacks
 
 void send_marker(tf::Transform& transform) {
+    visualization_msgs::Marker _robot_marker;
     _robot_marker.header.frame_id = "robot";
     _robot_marker.header.stamp = _odom.header.stamp;
     _robot_marker.ns = "robot";
@@ -65,7 +62,7 @@ void send_marker(tf::Transform& transform) {
     _robot_marker.color.g = 141.0 / 255.0;
     _robot_marker.color.b = 240.0 / 255.0;
 
-    _vis_pub.publish(_robot_marker);
+    _pub_viz.publish(_robot_marker);
 }
 
 /**
@@ -116,8 +113,7 @@ int main(int argc, char **argv)
 
     ros::Subscriber sub_enc = n.subscribe("/arduino/encoders",10,callback_encoders);
     _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
-
-    _vis_pub = n.advertise<visualization_msgs::Marker>( "visualization_marker", 0 );
+    _pub_viz = n.advertise<visualization_msgs::Marker>( "visualization_marker", 0 );
 
     ros::spin();
 
