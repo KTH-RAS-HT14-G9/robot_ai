@@ -30,13 +30,16 @@ typedef pcl::PointXYZI PCPoint;
 Mapping::Mapping() :
     fl_ir_reading(INVALID_READING), fr_ir_reading(INVALID_READING),
     bl_ir_reading(INVALID_READING), br_ir_reading(INVALID_READING),
-    pos(Point<double>(0.0,0.0)), turning(false)
+    pos(Point<double>(0.0,0.0)), turning(false),
+    wall_planes(new std::vector<common::vision::SegmentedPlane>())
 {
     handle = ros::NodeHandle("");
     distance_sub = handle.subscribe("/perception/ir/distance", 1, &Mapping::distanceCallback, this);
     odometry_sub = handle.subscribe("/pose/odometry/", 1, &Mapping::odometryCallback, this);
     start_turn_sub = handle.subscribe("/controller/turn/angle", 1, &Mapping::startTurnCallback, this);
     stop_turn_sub = handle.subscribe("/controller/turn/done", 1, &Mapping::stopTurnCallback, this);
+     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
+   // object_sub = handle.subscribe("/vision/object/position", 1, &Mapping::objectDetectedCallback, this);
     pc_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
     
     
@@ -47,7 +50,7 @@ Mapping::Mapping() :
     metaData.width = GRID_WIDTH;
     metaData.height = GRID_HEIGHT;
     grid.info = metaData;
-
+   
     initProbabilityGrid();
     initOccupancyGrid();
 }
@@ -99,6 +102,16 @@ void Mapping::updateIR(double ir_reading, double ir_x_offset)
         double mult = ir_reading > 0 ? 1.0 : -1.0;
         Point<double> max_point = Point<double>(ir_pos.x, MAX_IR_DIST*0.75*mult);
         markPointsFreeBetween(ir_pos, max_point);
+    }
+}
+
+void Mapping::updateWalls()
+{
+    for(int i = 0; i < wall_planes->size(); ++i)
+    {
+        if(wall_planes->at(i).is_ground_plane())
+            continue;
+
     }
 }
 
@@ -226,6 +239,13 @@ void Mapping::updateTransform()
     } catch (tf::TransformException ex) {
         ROS_ERROR("%s",ex.what());
     }
+}
+
+void Mapping::wallDetectedCallback(const vision_msgs::Planes::ConstPtr & msg)
+{
+    wall_planes->clear();
+    common::vision::msgToPlanes(msg, wall_planes);
+
 }
 
 void Mapping::publishMap()
