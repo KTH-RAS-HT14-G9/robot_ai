@@ -41,7 +41,7 @@ public:
 
 private:
     void markPointsFreeBetween(Point<double> p1, Point<double> p2);
-    void updateIR(Point<double> ir, Point<double> obstacle);
+    void updateIR(double ir_reading, double ir_x_offset);
     void markPointOccupied(Point<double> p);
     void markPointFree(Point<double> p);
     Point<int> robotPointToCell(Point<double> p);
@@ -66,7 +66,7 @@ private:
     vector<vector<int> > occ_grid;
     bool turning;
     Point<double> pos;
-    double fl_ir, fr_ir, bl_ir, br_ir;
+    double fl_ir_reading, fr_ir_reading, bl_ir_reading, br_ir_reading;
 
     static const double INVALID_READING;
     static const double MAP_HEIGHT, MAP_WIDTH;
@@ -74,6 +74,8 @@ private:
     static const double MAP_X_OFFSET, MAP_Y_OFFSET;
     static const double P_PRIOR, P_OCC, P_FREE;
     static const double FREE_OCCUPIED_THRESHOLD;
+
+    static const double MAX_IR_DIST;
 
     static const int UNKNOWN, FREE, OCCUPIED;
     static const int BLUE_CUBE;

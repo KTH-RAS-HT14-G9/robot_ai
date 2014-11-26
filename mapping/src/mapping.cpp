@@ -14,6 +14,9 @@ const double Mapping::P_FREE  = log(0.4);//log(0.35);
 
 const double Mapping::FREE_OCCUPIED_THRESHOLD = log(0.5);
 
+const double Mapping::MAX_IR_DIST = 0.5;
+const double Mapping::MIN_IR_DIST = 0.04;
+
 const double Mapping::INVALID_READING = -1.0;
 const int Mapping::UNKNOWN = 50;
 const int Mapping::FREE = 0;
@@ -25,8 +28,8 @@ typedef pcl::PointCloud<pcl::PointXYZI> PointCloud;
 typedef pcl::PointXYZI PCPoint;
 
 Mapping::Mapping() :
-    fl_ir(INVALID_READING), fr_ir(INVALID_READING),
-    bl_ir(INVALID_READING), br_ir(INVALID_READING),
+    fl_ir_reading(INVALID_READING), fr_ir_reading(INVALID_READING),
+    bl_ir_reading(INVALID_READING), br_ir_reading(INVALID_READING),
     pos(Point<double>(0.0,0.0)), turning(false)
 {
     handle = ros::NodeHandle("");
@@ -42,40 +45,13 @@ Mapping::Mapping() :
 
 void Mapping::updateGrid()
 {
-   // if(turning)
-   //     return;
+    // if(turning)
+    //     return;
 
-    if(isIRValid(fl_ir))
-    {
-        double ir_x_offset = robot::ir::offset_front_left_forward;
-        Point<double> ir(ir_x_offset, 0);
-        Point<double> obstacle(ir_x_offset,fl_ir);
-        updateIR(ir, obstacle);
-    }
-
-    if(isIRValid(fr_ir))
-    {
-        double ir_x_offset = robot::ir::offset_front_right_forward;
-        Point<double> ir(ir_x_offset, 0);
-        Point<double> obstacle(ir_x_offset,-fr_ir);
-        updateIR(ir, obstacle);
-    }
-
-    if(isIRValid(bl_ir))
-    {
-        double ir_x_offset = -1.0*robot::ir::offset_rear_left_forward;
-        Point<double> ir(ir_x_offset, 0);
-        Point<double> obstacle(ir_x_offset, bl_ir);
-        updateIR(ir, obstacle);
-    }
-
-    if(isIRValid(br_ir))
-    {
-        double ir_x_offset = -1.0*robot::ir::offset_rear_right_forward;
-        Point<double> ir(ir_x_offset, 0);
-        Point<double> obstacle(ir_x_offset, -br_ir);
-        updateIR(ir, obstacle);
-    }
+    updateIR(fl_ir_reading, robot::ir::offset_front_left_forward);
+    updateIR(-fr_ir_reading, robot::ir::offset_front_right_forward);
+    updateIR(-br_ir_reading, -robot::ir::offset_rear_right_forward);
+    updateIR(bl_ir_reading, -robot::ir::offset_rear_left_forward);
 }
 
 void Mapping::markPointsFreeBetween(Point<double> p1, Point<double> p2)
@@ -102,10 +78,19 @@ void Mapping::markPointsFreeBetween(Point<double> p1, Point<double> p2)
     }
 }
 
-void Mapping::updateIR(Point<double> ir, Point<double> obstacle)
+void Mapping::updateIR(double ir_reading, double ir_x_offset)
 {
-    markPointOccupied(obstacle);
-    markPointsFreeBetween(ir, obstacle);
+    Point<double> ir_pos = Point<double>(ir_x_offset, 0);
+    if(isIRValid(ir_reading))
+    {
+        Point<double> obstacle(ir_x_offset, ir_reading);
+        markPointOccupied(obstacle);
+        markPointsFreeBetween(ir_pos, obstacle);
+    } else {
+        double mult = ir_reading > 0 ? 1.0 : -1.0;
+        Point<double> max_point = Point<double>(ir_pos.x, MAX_IR_DIST*0.75*mult);
+        markPointsFreeBetween(ir_pos, max_point);
+    }
 }
 
 void Mapping::markPointOccupied(Point<double> point)
@@ -122,7 +107,6 @@ void Mapping::markPointOccupied(Point<double> point)
             updateOccupancyGrid(c);
         }
     }
-
 }
 
 void Mapping::markPointFree(Point<double> point)
@@ -178,7 +162,7 @@ void Mapping::updateOccupancyGrid(Point<int> cell)
 
 bool Mapping::isIRValid(double value)
 {
-    return value > 0.0 && value < 0.5;
+    return std::abs(value) < MAX_IR_DIST && abs(value) > MIN_IR_DIST;
 }
 
 void Mapping::initProbabilityGrid()
@@ -205,10 +189,10 @@ void Mapping::initOccupancyGrid()
 
 void Mapping::distanceCallback(const ir_converter::Distance::ConstPtr& distance)
 {   
-    fl_ir = distance->fl_side;
-    bl_ir = distance->bl_side;
-    fr_ir = distance->fr_side;
-    br_ir = distance->br_side;
+    fl_ir_reading = distance->fl_side;
+    bl_ir_reading = distance->bl_side;
+    fr_ir_reading = distance->fr_side;
+    br_ir_reading = distance->br_side;
 }
 
 void Mapping::odometryCallback(const nav_msgs::Odometry::ConstPtr& odom)
@@ -279,7 +263,7 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "mapping");
     Mapping mapping;
-    ros::Rate loop_rate(20); // what should this be?
+    ros::Rate loop_rate(20);
     int counter = 0;
     while(ros::ok())
     {
