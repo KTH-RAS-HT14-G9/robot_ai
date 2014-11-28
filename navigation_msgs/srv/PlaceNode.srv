@@ -1,0 +1,11 @@
+int32 id_previous
+int32 direction
+
+bool north_blocked
+bool east_blocked
+bool south_blocked
+bool west_blocked
+
+---
+
+Node generated_node
