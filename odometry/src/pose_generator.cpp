@@ -121,6 +121,12 @@ void callback_ir(const ras_arduino_msgs::ADConverterConstPtr& adc)
         _ir_theta = std::numeric_limits<double>::quiet_NaN();
 }
 
+double fix_ir_direction(double ir_t) {
+    int theta = (int)_theta;
+    theta -= (theta%90);
+    return theta+ir_t;
+}
+
 /**
   * Adapter from http://simreal.com/content/Odometry
   */
@@ -133,7 +139,8 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
     double theta = (dist_r - dist_l) / robot::dim::wheel_distance;
 
     if (!std::isnan(_ir_theta)) {
-        _theta = (1.0 - _ir_theta_factor())*(_theta+theta) + _ir_theta_factor()*_ir_theta;
+        double ir_theta = fix_ir_direction(_ir_theta);
+        _theta = (1.0 - _ir_theta_factor())*(_theta+theta) + _ir_theta_factor()*ir_theta;
         _ir_theta = std::numeric_limits<double>::quiet_NaN();
     }
     else {
