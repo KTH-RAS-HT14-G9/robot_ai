@@ -224,6 +224,10 @@ void Graph::path_to_next_unknown(int id_from, std::vector<int>& path)
         int id = queue.front();
         queue.pop();
 
+        //check if node already visited
+        if (previous[id] != -1)
+            continue;
+
         navigation_msgs::Node& node = _nodes[id];
         if (node.id_north >= 0) {
             if(update_dijkstra(id, node.id_north, _nodes, previous, distances))
