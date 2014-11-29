@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(navigation)
 
-set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Debug)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -9,10 +9,13 @@ set(CMAKE_BUILD_TYPE Debug)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
-  tf
+  navigation_msgs
   common
-  #navigation_msgs
+  pcl_ros
+  tf
 )
+
+#find_package(navigation_msgs)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -114,6 +117,7 @@ add_executable(graph src/graph.cpp)
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
 # add_dependencies(navigation_node navigation_generate_messages_cpp)
+add_dependencies(graph navigation_msgs_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(navigation_node
