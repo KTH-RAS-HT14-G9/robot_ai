@@ -2,6 +2,8 @@
 #include <ras_arduino_msgs/Encoders.h>
 #include <ras_arduino_msgs/ADConverter.h>
 #include <nav_msgs/Odometry.h>
+#include <std_msgs/Float64.h>
+#include <std_msgs/Bool.h>
 #include <common/robot.h>
 #include <common/parameter.h>
 #include <tf/transform_broadcaster.h>
@@ -13,6 +15,7 @@
 Parameter<double> _ir_theta_factor("/odometry/ir_theta_factor", 0.7);
 
 double _x,_y,_theta, _ir_theta;
+bool _turning;
 tf::Quaternion _q;
 nav_msgs::Odometry _odom;
 
@@ -89,6 +92,10 @@ double ir_theta(double front, double rear, double front_offset, double rear_offs
 void callback_ir(const ras_arduino_msgs::ADConverterConstPtr& adc)
 {
     using namespace robot::ir;
+
+    if (_turning)
+        return;
+
     double fl = distance(id_front_left, adc->ch1) + offset_front_left;
     double fr = distance(id_front_right, adc->ch2) + offset_front_right;
     double bl = distance(id_rear_left, adc->ch3) + offset_rear_left;
@@ -127,6 +134,7 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
 
     if (!std::isnan(_ir_theta)) {
         _theta = (1.0 - _ir_theta_factor())*(_theta+theta) + _ir_theta_factor()*_ir_theta;
+        _ir_theta = std::numeric_limits<double>::quiet_NaN();
     }
     else {
         _theta += theta;
@@ -154,6 +162,14 @@ void connect_callback(const ros::SingleSubscriberPublisher& pub)
     pub.publish(_odom);
 }
 
+void callback_turn(const std_msgs::Float64ConstPtr& dummy) {
+    _turning = true;
+}
+
+void callback_turn_done(const std_msgs::BoolConstPtr& dummy) {
+    _turning = false;
+}
+
 //------------------------------------------------------------------------------
 // Entry point
 
@@ -166,7 +182,8 @@ int main(int argc, char **argv)
     _odom.header.frame_id = "map";
     _x = _y = 0;
     _theta = 0;
-    _ir_theta = 0;
+    _ir_theta = std::numeric_limits<double>::quiet_NaN();
+    _turning = false;
 
     ros::Subscriber sub_enc = n.subscribe("/arduino/encoders",10,callback_encoders);
     ros::Subscriber sub_ir = n.subscribe("/arduino/adc",10,callback_ir);
