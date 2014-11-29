@@ -128,7 +128,7 @@ navigation_msgs::Node& Graph::get_node(int id)
     if (id < 0 || id >= _nodes.size())
         ROS_ERROR("[Graph::get_node] id: %d out of array bounds",id);
 
-    return _nodes[id];
+    return _nodes.at(id);
 }
 
 double sq_dist(double x0, double y0, double x1, double y1)
@@ -225,8 +225,8 @@ void Graph::path_to_next_unknown(int id_from, std::vector<int>& path)
         queue.pop();
 
         //check if node already visited
-        if (previous[id] != -1)
-            continue;
+//        if (previous[id] != -1)
+//            continue;
 
         navigation_msgs::Node& node = _nodes[id];
         if (node.id_north >= 0) {

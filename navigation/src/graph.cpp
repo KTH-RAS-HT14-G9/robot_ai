@@ -4,12 +4,18 @@
 #include <navigation_msgs/NextNodeOfInterest.h>
 #include <nav_msgs/Odometry.h>
 #include <navigation/Graph.h>
+#include <navigation/GraphViz.h>
+#include <tf/transform_listener.h>
+#include <tf/transform_datatypes.h>
+
 
 #define NODE_TRAIT_UNKNOWN 0
 #define NODE_TRAIT_HAS_OBJECT 1
 
 geometry_msgs::Point _position;
 Graph _graph;
+boost::shared_ptr<GraphViz> _graph_viz;
+tf::StampedTransform _transform;
 
 typedef struct GraphPath_t {
     std::vector<int> path;
@@ -20,6 +26,7 @@ GraphPath _path;
 ros::Publisher _pub_on_node;
 
 void callback_odometry(const nav_msgs::OdometryConstPtr& odom) {
+
     _position = odom->pose.pose.position;
 }
 
@@ -94,8 +101,11 @@ void test_graph() {
     test_request(2,Graph::West,false,false,true,true,place);
     _graph.place_node(2.5,0.5,place);
 
-    test_request(3,Graph::North,true,false,false,true,place);
+    test_request(3,Graph::North,false,false,false,true,place);
     _graph.place_node(2.5,1.0,place);
+
+    test_request(4,Graph::North,true,true,false,false,place);
+    _graph.place_node(2.5,1.5,place);
 
     std::vector<int> path;
     _graph.path_to_next_unknown(0,path);
@@ -106,6 +116,34 @@ void test_graph() {
     std::cout << std::endl;
 }
 
+bool update_transform()
+{
+    static tf::TransformListener tf_listener;
+    try {
+        tf_listener.waitForTransform("map", "robot", ros::Time(0), ros::Duration(1.0) );
+        tf_listener.lookupTransform("map", "robot", ros::Time(0), _transform);
+    } catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what());
+        return false;
+    }
+    return true;
+}
+
+void robotToMapTransform(float x, float y, float& map_x, float& map_y)
+{
+    geometry_msgs::PointStamped robot_point_msg;
+    robot_point_msg.header.frame_id = "robot";
+    robot_point_msg.header.stamp = ros::Time::now();
+    robot_point_msg.point.x = x;
+    robot_point_msg.point.y = y;
+    robot_point_msg.point.z = 0.0;
+    tf::Stamped<tf::Point> robot_point;
+    tf::pointStampedMsgToTF(robot_point_msg, robot_point);
+    tf::Vector3 map_point = _transform*robot_point;
+
+    map_x = map_point.x();
+    map_y = map_point.y();
+}
 
 int main(int argc, char **argv)
 {
@@ -113,7 +151,8 @@ int main(int argc, char **argv)
 
     _path.next = 0;
 
-    //test_graph();
+    bool test = false;
+    /*test_graph(); test=true;*/
 
     ros::NodeHandle n;
 
@@ -126,13 +165,24 @@ int main(int argc, char **argv)
 
     navigation_msgs::Node node;
 
+    _graph_viz = boost::shared_ptr<GraphViz>(new GraphViz(_graph, n));
+
     ros::Rate rate(10.0);
 
     while(n.ok())
     {
-        if (_graph.on_node(_position.x, _position.y, node)) {
+        if(!test && !update_transform()) continue;
+
+        float x = _position.x;
+        float y = _position.y;
+        if(!test) robotToMapTransform(x,y, x,y);
+
+        if (_graph.on_node(x,y, node)) {
             _pub_on_node.publish(node);
+            _graph_viz->highlight_node(node.id_this,true);
         }
+
+        _graph_viz->draw();
 
         ros::spinOnce();
         rate.sleep();

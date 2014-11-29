@@ -11,6 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   navigation_msgs
   common
+  pcl_ros
+  tf
 )
 
 #find_package(navigation_msgs)

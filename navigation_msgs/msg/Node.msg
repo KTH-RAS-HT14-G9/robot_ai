@@ -5,5 +5,7 @@ int32 id_east
 int32 id_south
 int32 id_west
 
+bool object_here
+
 float32 x
 float32 y
