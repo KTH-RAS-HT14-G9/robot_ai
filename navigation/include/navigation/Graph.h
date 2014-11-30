@@ -23,7 +23,10 @@ public:
     Graph();
 
     navigation_msgs::Node& place_node(float x, float y,
-                    navigation_msgs::PlaceNodeRequest& request);
+                                      navigation_msgs::PlaceNodeRequest& request);
+    navigation_msgs::Node& place_object(int id_origin,
+                                        navigation_msgs::PlaceNodeRequest& request);
+
     bool on_node(float x, float y, navigation_msgs::Node& node);
 
     navigation_msgs::Node& get_node(int id);
@@ -43,15 +46,19 @@ protected:
                    bool blocked_south, bool blocked_west);
     void set_connected(int id, int dir, int next);
 
+    void update_position(float& x, float& y, float new_x, float new_y);
+
     std::vector<navigation_msgs::Node> _nodes;
     int _next_node_id;
 
     Parameter<double> _dist_thresh;
+    Parameter<bool> _update_positions;
 };
 
 Graph::Graph()
     :_next_node_id(0)
     ,_dist_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance/2.0)
+    ,_update_positions("/navigation/graph/update_positions",true)
 {
 }
 
@@ -102,6 +109,14 @@ void Graph::set_connected(int id, int dir, int id_next)
     }
 }
 
+void Graph::update_position(float& x, float& y, float new_x, float new_y)
+{
+    if (_update_positions()) {
+        x = 0.3*x + 0.7*new_x;
+        y = 0.3*y + 0.7*new_y;
+    }
+}
+
 navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::PlaceNodeRequest &request)
 {
     navigation_msgs::Node node;
@@ -118,9 +133,43 @@ navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::Plac
 
         _nodes.push_back(node);
     }
+    else {
+        update_position(_nodes[node.id_this].x, _nodes[node.id_this].y, x, y);
+    }
 
     if (_nodes.size() > 1)
         set_connected(request.id_previous, request.direction, node.id_this);
+
+    return _nodes[node.id_this];
+}
+
+navigation_msgs::Node& Graph::place_object(int id_origin, navigation_msgs::PlaceNodeRequest &request)
+{
+    navigation_msgs::Node neighbor;
+    bool has_neighbor = on_node(request.object_x,request.object_y, neighbor);
+
+    navigation_msgs::Node node;
+
+    //only place object node, if there is no other node close nearby,
+    //or if the neighbor is not an object node
+    if (!has_neighbor || neighbor.object_here == false) {
+
+        init_node(node, true, true, true, true);
+
+        node.object_here = true;
+        node.x = request.object_x;
+        node.y = request.object_y;
+
+        node.id_this = _nodes.size();
+
+        _nodes.push_back(node);
+    }
+    else {
+        node = neighbor;
+        update_position(_nodes[node.id_this].x, _nodes[node.id_this].y, request.object_x, request.object_y);
+    }
+
+    set_connected(id_origin, request.object_direction, node.id_this);
 
     return _nodes[node.id_this];
 }

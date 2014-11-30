@@ -3,6 +3,7 @@
 
 #include "Graph.h"
 #include <common/marker_delegate.h>
+#include <sstream>
 
 class GraphViz {
 public:
@@ -23,19 +24,12 @@ protected:
             ,id_south(-1)
             ,id_west(-1)
             ,id_circle(-1)
+            ,id_label(-1)
         {}
-//        MarkerID(int id, int north, int east, int south, int west)
-//            :id_node(id)
-//            ,id_north(north)
-//            ,id_east(east)
-//            ,id_south(south)
-//            ,id_west(west)
-//            ,id_circle(-1)
-//        {}
 
         int id_node;
         int id_north, id_east, id_south, id_west;
-        int id_circle;
+        int id_circle, id_label;
     };
 
     void draw_node(int id, bool highlight);
@@ -108,6 +102,7 @@ void GraphViz::draw_node(int id, bool highlight)
     static common::Color color_unknown(255,148,148);
 
     static common::Color color_circle(148,180,255);
+    static common::Color color_object(0,255,0);
 
     static const float line_z = 0.025f;
 
@@ -116,17 +111,25 @@ void GraphViz::draw_node(int id, bool highlight)
 
     common::Color& color_node = highlight ? color_regular_h : color_regular;
 
-    if (node.object_here) {
-        if (highlight)
-            color_node = color_w_obj_h;
-        else
-            color_node = color_w_obj;
-    }
+//    if (node.object_here) {
+//        if (highlight)
+//            color_node = color_w_obj_h;
+//        else
+//            color_node = color_w_obj;
+//    }
 
     //draw node
-    std::string label = ""+node.id_this;
-    marker_id.id_node = _marker.add_cube(node.x,node.y,scale, color_node.r, color_node.g, color_node.b, label, marker_id.id_node);
-    marker_id.id_circle = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_circle.r, color_circle.g, color_circle.b, 50, marker_id.id_circle);
+    if (node.object_here) {
+        std::string label = static_cast<std::ostringstream*>( &(std::ostringstream() << node.object_type) )->str();
+        marker_id.id_circle = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_object.r, color_object.g, color_object.b, 50, marker_id.id_circle);
+        marker_id.id_label = _marker.add_text(node.x,node.y, scale*2.0f, label, 0,255,0, marker_id.id_label);
+    }
+    else {
+        std::string label = static_cast<std::ostringstream*>( &(std::ostringstream() << node.id_this) )->str();
+        marker_id.id_node = _marker.add_cube(node.x,node.y,scale, color_node.r, color_node.g, color_node.b, marker_id.id_node);
+        marker_id.id_circle = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_circle.r, color_circle.g, color_circle.b, 50, marker_id.id_circle);
+        marker_id.id_label = _marker.add_text(node.x,node.y, scale*2.0f, label, 255,255,255, marker_id.id_label);
+    }
 
     //draw edges
     if (node.id_north >= NAV_GRAPH_UNKNOWN) {

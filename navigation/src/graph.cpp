@@ -39,6 +39,8 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
     }
 
     response.generated_node = _graph.place_node(_position.x, _position.y, request);
+    if (request.object_here == true) _graph.place_object(response.generated_node.id_this, request);
+
     return true;
 }
 
@@ -88,30 +90,36 @@ void test_request(int id_prev, int dir, bool blocked_n, bool blocked_e, bool blo
 
 void test_graph() {
     navigation_msgs::PlaceNodeRequest place;
+    navigation_msgs::Node node;
 
     test_request(-1,-1, false, false, true, true, place);
-    _graph.place_node(0,0,place);
+    node = _graph.place_node(0,0,place);
 
-    test_request(0,Graph::East,false,true,true,false,place);
-    _graph.place_node(3,0,place);
+    test_request(node.id_this,Graph::East,false,true,true,false,place);
+    node = _graph.place_node(3,0,place);
 
-    test_request(1,Graph::North,true,true,false,false,place);
-    _graph.place_node(3,0.5,place);
+    test_request(node.id_this,Graph::North,true,true,false,false,place);
+    node = _graph.place_node(3,0.5,place);
 
-    test_request(2,Graph::West,false,false,true,true,place);
-    _graph.place_node(2.5,0.5,place);
+    test_request(node.id_this,Graph::West,false,false,true,true,place);
+    node = _graph.place_node(2.5,0.5,place);
 
-    test_request(3,Graph::North,false,false,false,true,place);
-    _graph.place_node(2.5,1.0,place);
+    test_request(node.id_this,Graph::North,false,false,false,true,place);
+    node = _graph.place_node(2.5,1.0,place);
 
-    test_request(4,Graph::North,true,true,false,false,place);
-    _graph.place_node(2.5,1.5,place);
+    test_request(node.id_this,Graph::North,true,true,false,false,place);
+    place.object_here = true;
+    place.object_x = 2.8;
+    place.object_y = 1.55;
+    place.object_direction = Graph::East;
+    node = _graph.place_node(2.5,1.5,place);
+    _graph.place_object(node.id_this, place);
 
-    test_request(5,Graph::West,true,false,false,true,place);
-    _graph.place_node(0,1.5,place);
+    test_request(node.id_this,Graph::West,true,false,false,true,place);
+    node = _graph.place_node(0,1.5,place);
 
-    test_request(6,Graph::South,false,false,true,true,place);
-    _graph.place_node(0,0.1,place);
+    test_request(node.id_this,Graph::South,false,false,true,true,place);
+    node = _graph.place_node(0,0.1,place);
 
     std::vector<int> path;
     _graph.path_to_next_unknown(0,path);
@@ -120,6 +128,15 @@ void test_graph() {
         std::cout << path[i] << " -> ";
 
     std::cout << std::endl;
+
+
+    test_request(4,Graph::East,false,true,true,false,place);
+    place.object_here = true;
+    place.object_x = 2.8;
+    place.object_y = 1.48;
+    place.object_direction = Graph::North;
+    node = _graph.place_node(3,1.0,place);
+    _graph.place_object(node.id_this,place);
 }
 
 bool update_transform()
@@ -177,18 +194,18 @@ int main(int argc, char **argv)
 
     while(n.ok())
     {
-        if(!test && !update_transform()) continue;
+        if(test || update_transform()) {
+            float x = _position.x;
+            float y = _position.y;
+            if(!test) robotToMapTransform(x,y, x,y);
 
-        float x = _position.x;
-        float y = _position.y;
-        if(!test) robotToMapTransform(x,y, x,y);
+            if (_graph.on_node(x,y, node)) {
+                _pub_on_node.publish(node);
+                _graph_viz->highlight_node(node.id_this,true);
+            }
 
-        if (_graph.on_node(x,y, node)) {
-            _pub_on_node.publish(node);
-            _graph_viz->highlight_node(node.id_this,true);
+            _graph_viz->draw();
         }
-
-        _graph_viz->draw();
 
         ros::spinOnce();
         rate.sleep();
