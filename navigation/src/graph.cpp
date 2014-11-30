@@ -20,6 +20,7 @@ tf::StampedTransform _transform;
 typedef struct GraphPath_t {
     std::vector<int> path;
     int next;
+    int trait;
 } GraphPath;
 GraphPath _path;
 
@@ -39,31 +40,50 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
     }
 
     response.generated_node = _graph.place_node(_position.x, _position.y, request);
+    if (request.object_here == true) _graph.place_object(response.generated_node.id_this, request);
+
     return true;
+}
+
+void init_path_to_noi(int id_from, int trait) {
+    _path.next = 0;
+    _path.trait = trait;
+    _path.path.clear();
+
+    if (trait == NODE_TRAIT_UNKNOWN) {
+        ROS_INFO("Finding shortest path to next unkown location...");
+        _graph.path_to_next_unknown(id_from, _path.path);
+    }
+    else if (trait == NODE_TRAIT_HAS_OBJECT) {
+        ROS_INFO("Finding shortest path to next object...");
+        _graph.path_to_next_object(id_from, _path.path);
+    }
+    else
+        ROS_ERROR("Requested trait %d is not implemented yet.", trait);
 }
 
 bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
                       navigation_msgs::NextNodeOfInterestResponse& response)
 {
-    if ( request.trait == NODE_TRAIT_UNKNOWN ) {
-        if (_path.next < _path.path.size()) {
+    if ( request.trait == NODE_TRAIT_UNKNOWN || request.trait == NODE_TRAIT_HAS_OBJECT )
+    {
+        //if we haven't finished an existing path: advance a step
+        if (_path.next < _path.path.size())
+        {
+            if (request.trait != _path.trait) {
+                ROS_ERROR("Trait was changed during path following. Will service request anyway.");
+                init_path_to_noi(request.id_from, request.trait);
+            }
             if (request.id_from != _path.path[_path.next]) {
                 ROS_ERROR("Last path was not completed. Will service request anyway.");
-                _path.next = 0;
-                _path.path.clear();
-
-                _graph.path_to_next_unknown(request.id_from, _path.path);
+                init_path_to_noi(request.id_from, request.trait);
             }
             else {
                 _path.next++;
             }
         }
         else {
-            ROS_INFO("Finding shortest path to next unkown location...");
-            _path.next = 0;
-            _path.path.clear();
-
-            _graph.path_to_next_unknown(request.id_from, _path.path);
+            init_path_to_noi(request.id_from, request.trait);
         }
 
         response.target_node = _graph.get_node(_path.path[_path.next]);
@@ -88,30 +108,36 @@ void test_request(int id_prev, int dir, bool blocked_n, bool blocked_e, bool blo
 
 void test_graph() {
     navigation_msgs::PlaceNodeRequest place;
+    navigation_msgs::Node node;
 
     test_request(-1,-1, false, false, true, true, place);
-    _graph.place_node(0,0,place);
+    node = _graph.place_node(0,0,place);
 
-    test_request(0,Graph::East,false,true,true,false,place);
-    _graph.place_node(3,0,place);
+    test_request(node.id_this,Graph::East,false,true,true,false,place);
+    node = _graph.place_node(3,0,place);
 
-    test_request(1,Graph::North,true,true,false,false,place);
-    _graph.place_node(3,0.5,place);
+    test_request(node.id_this,Graph::North,true,true,false,false,place);
+    node = _graph.place_node(3,0.5,place);
 
-    test_request(2,Graph::West,false,false,true,true,place);
-    _graph.place_node(2.5,0.5,place);
+    test_request(node.id_this,Graph::West,false,false,true,true,place);
+    node = _graph.place_node(2.5,0.5,place);
 
-    test_request(3,Graph::North,false,false,false,true,place);
-    _graph.place_node(2.5,1.0,place);
+    test_request(node.id_this,Graph::North,false,false,false,true,place);
+    node = _graph.place_node(2.5,1.0,place);
 
-    test_request(4,Graph::North,true,true,false,false,place);
-    _graph.place_node(2.5,1.5,place);
+    test_request(node.id_this,Graph::North,true,true,false,false,place);
+    place.object_here = true;
+    place.object_x = 2.8;
+    place.object_y = 1.55;
+    place.object_direction = Graph::East;
+    node = _graph.place_node(2.5,1.5,place);
+    _graph.place_object(node.id_this, place);
 
-    test_request(5,Graph::West,true,false,false,true,place);
-    _graph.place_node(0,1.5,place);
+    test_request(node.id_this,Graph::West,true,false,false,true,place);
+    node = _graph.place_node(0,1.5,place);
 
-    test_request(6,Graph::South,false,false,true,true,place);
-    _graph.place_node(0,0.1,place);
+    test_request(node.id_this,Graph::South,false,false,true,true,place);
+    node = _graph.place_node(0,0.1,place);
 
     std::vector<int> path;
     _graph.path_to_next_unknown(0,path);
@@ -120,6 +146,22 @@ void test_graph() {
         std::cout << path[i] << " -> ";
 
     std::cout << std::endl;
+
+    path.clear();
+    _graph.path_to_next_object(0,path);
+
+    for(int i = 0; i < path.size(); ++i)
+        std::cout << path[i] << " -> ";
+
+    std::cout << std::endl;
+
+    test_request(4,Graph::East,false,true,true,false,place);
+    place.object_here = true;
+    place.object_x = 2.8;
+    place.object_y = 1.48;
+    place.object_direction = Graph::North;
+    node = _graph.place_node(3,1.0,place);
+    _graph.place_object(node.id_this,place);
 }
 
 bool update_transform()
@@ -177,18 +219,18 @@ int main(int argc, char **argv)
 
     while(n.ok())
     {
-        if(!test && !update_transform()) continue;
+        if(test || update_transform()) {
+            float x = _position.x;
+            float y = _position.y;
+            if(!test) robotToMapTransform(x,y, x,y);
 
-        float x = _position.x;
-        float y = _position.y;
-        if(!test) robotToMapTransform(x,y, x,y);
+            if (_graph.on_node(x,y, node)) {
+                _pub_on_node.publish(node);
+                _graph_viz->highlight_node(node.id_this,true);
+            }
 
-        if (_graph.on_node(x,y, node)) {
-            _pub_on_node.publish(node);
-            _graph_viz->highlight_node(node.id_this,true);
+            _graph_viz->draw();
         }
-
-        _graph_viz->draw();
 
         ros::spinOnce();
         rate.sleep();

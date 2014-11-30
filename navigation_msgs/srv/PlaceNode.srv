@@ -12,6 +12,12 @@ bool east_blocked
 bool south_blocked
 bool west_blocked
 
+bool object_here
+int32 object_type
+int32 object_direction
+float32 object_x
+float32 object_y
+
 ---
 
 Node generated_node
