@@ -201,22 +201,18 @@ void Graph::path_to_next_unknown(int id_from, std::vector<int>& path)
     std::vector<int> previous;
     std::vector<float> distances;
     std::vector<bool> has_unkown;
+    std::vector<bool> visited;
 
     has_unkown.resize(_nodes.size());
-    previous.resize(_nodes.size());
-    distances.resize(_nodes.size());
+    previous.resize(_nodes.size(),-1);
+    distances.resize(_nodes.size(), std::numeric_limits<float>::infinity());
+    visited.resize(_nodes.size(),false);
 
     int i = 0;
     for (std::vector<navigation_msgs::Node>::iterator it = _nodes.begin(); it != _nodes.end(); ++it, ++i) {
-        previous[i] = -1;
-
         has_unkown[i] = has_unkown_directions(i);
-
-        if (i != id_from)
-            distances[i] = std::numeric_limits<float>::infinity();
-        else
-            distances[i] = 0;
     }
+    distances[id_from] = 0;
 
     queue.push(id_from);
 
@@ -225,8 +221,10 @@ void Graph::path_to_next_unknown(int id_from, std::vector<int>& path)
         queue.pop();
 
         //check if node already visited
-//        if (previous[id] != -1)
-//            continue;
+        if (visited[id] == true)
+            continue;
+
+        visited[id] = true;
 
         navigation_msgs::Node& node = _nodes[id];
         if (node.id_north >= 0) {

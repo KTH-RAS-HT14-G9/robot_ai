@@ -117,7 +117,8 @@ void GraphViz::draw_node(int id, bool highlight)
     }
 
     //draw node
-    marker_id.id_node = _marker.add_cube(node.x,node.y,scale, color_node.r, color_node.g, color_node.b, marker_id.id_node);
+    std::string label = ""+node.id_this;
+    marker_id.id_node = _marker.add_cube(node.x,node.y,scale, color_node.r, color_node.g, color_node.b, label, marker_id.id_node);
 
     //draw edges
     if (node.id_north >= NAV_GRAPH_UNKNOWN) {
