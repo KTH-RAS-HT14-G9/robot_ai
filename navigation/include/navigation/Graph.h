@@ -34,6 +34,8 @@ public:
 
     int num_nodes() {return _nodes.size();}
 
+    double get_dist_thresh() {return _dist_thresh();}
+
 protected:
 
     void init_node(navigation_msgs::Node &node,
