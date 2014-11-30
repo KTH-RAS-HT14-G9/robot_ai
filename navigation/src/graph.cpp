@@ -20,6 +20,7 @@ tf::StampedTransform _transform;
 typedef struct GraphPath_t {
     std::vector<int> path;
     int next;
+    int trait;
 } GraphPath;
 GraphPath _path;
 
@@ -44,28 +45,45 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
     return true;
 }
 
+void init_path_to_noi(int id_from, int trait) {
+    _path.next = 0;
+    _path.trait = trait;
+    _path.path.clear();
+
+    if (trait == NODE_TRAIT_UNKNOWN) {
+        ROS_INFO("Finding shortest path to next unkown location...");
+        _graph.path_to_next_unknown(id_from, _path.path);
+    }
+    else if (trait == NODE_TRAIT_HAS_OBJECT) {
+        ROS_INFO("Finding shortest path to next object...");
+        _graph.path_to_next_object(id_from, _path.path);
+    }
+    else
+        ROS_ERROR("Requested trait %d is not implemented yet.", trait);
+}
+
 bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
                       navigation_msgs::NextNodeOfInterestResponse& response)
 {
-    if ( request.trait == NODE_TRAIT_UNKNOWN ) {
-        if (_path.next < _path.path.size()) {
+    if ( request.trait == NODE_TRAIT_UNKNOWN || request.trait == NODE_TRAIT_HAS_OBJECT )
+    {
+        //if we haven't finished an existing path: advance a step
+        if (_path.next < _path.path.size())
+        {
+            if (request.trait != _path.trait) {
+                ROS_ERROR("Trait was changed during path following. Will service request anyway.");
+                init_path_to_noi(request.id_from, request.trait);
+            }
             if (request.id_from != _path.path[_path.next]) {
                 ROS_ERROR("Last path was not completed. Will service request anyway.");
-                _path.next = 0;
-                _path.path.clear();
-
-                _graph.path_to_next_unknown(request.id_from, _path.path);
+                init_path_to_noi(request.id_from, request.trait);
             }
             else {
                 _path.next++;
             }
         }
         else {
-            ROS_INFO("Finding shortest path to next unkown location...");
-            _path.next = 0;
-            _path.path.clear();
-
-            _graph.path_to_next_unknown(request.id_from, _path.path);
+            init_path_to_noi(request.id_from, request.trait);
         }
 
         response.target_node = _graph.get_node(_path.path[_path.next]);
@@ -129,6 +147,13 @@ void test_graph() {
 
     std::cout << std::endl;
 
+    path.clear();
+    _graph.path_to_next_object(0,path);
+
+    for(int i = 0; i < path.size(); ++i)
+        std::cout << path[i] << " -> ";
+
+    std::cout << std::endl;
 
     test_request(4,Graph::East,false,true,true,false,place);
     place.object_here = true;

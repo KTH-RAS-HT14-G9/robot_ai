@@ -32,6 +32,7 @@ public:
     navigation_msgs::Node& get_node(int id);
 
     void path_to_next_unknown(int id_from, std::vector<int>& path);
+    void path_to_next_object(int id_from, std::vector<int>& path);
 
     bool has_unkown_directions(int id);
 
@@ -47,6 +48,8 @@ protected:
     void set_connected(int id, int dir, int next);
 
     void update_position(float& x, float& y, float new_x, float new_y);
+
+    void path_to_poi(int id_from, const std::vector<bool>& filter, std::vector<int>& path);
 
     std::vector<navigation_msgs::Node> _nodes;
     int _next_node_id;
@@ -70,6 +73,7 @@ void Graph::init_node(navigation_msgs::Node &node,
     node.id_north = blocked_north ? NAV_GRAPH_BLOCKED : NAV_GRAPH_UNKNOWN;
     node.id_south = blocked_south ? NAV_GRAPH_BLOCKED : NAV_GRAPH_UNKNOWN;
     node.id_west = blocked_west ? NAV_GRAPH_BLOCKED : NAV_GRAPH_UNKNOWN;
+    node.object_here = false;
 }
 
 void Graph::set_connected(int id, int dir, int id_next)
@@ -243,6 +247,31 @@ bool update_dijkstra(int id,
 
 void Graph::path_to_next_unknown(int id_from, std::vector<int>& path)
 {
+    std::vector<bool> has_unkown;
+    has_unkown.resize(_nodes.size());
+    int i = 0;
+    for (std::vector<navigation_msgs::Node>::iterator it = _nodes.begin(); it != _nodes.end(); ++it, ++i) {
+        has_unkown[i] = has_unkown_directions(i);
+    }
+
+    path_to_poi(id_from, has_unkown, path);
+}
+
+void Graph::path_to_next_object(int id_from, std::vector<int> &path)
+{
+    std::vector<bool> is_object;
+    is_object.resize(_nodes.size());
+    int i = 0;
+    for (std::vector<navigation_msgs::Node>::iterator it = _nodes.begin(); it != _nodes.end(); ++it, ++i) {
+        is_object[i] = it->object_here;
+    }
+
+    path_to_poi(id_from, is_object, path);
+}
+
+
+void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vector<int> &path)
+{
     if (_nodes.size() == 0)
         return;
 
@@ -251,18 +280,12 @@ void Graph::path_to_next_unknown(int id_from, std::vector<int>& path)
 
     std::vector<int> previous;
     std::vector<float> distances;
-    std::vector<bool> has_unkown;
     std::vector<bool> visited;
 
-    has_unkown.resize(_nodes.size());
     previous.resize(_nodes.size(),-1);
     distances.resize(_nodes.size(), std::numeric_limits<float>::infinity());
     visited.resize(_nodes.size(),false);
 
-    int i = 0;
-    for (std::vector<navigation_msgs::Node>::iterator it = _nodes.begin(); it != _nodes.end(); ++it, ++i) {
-        has_unkown[i] = has_unkown_directions(i);
-    }
     distances[id_from] = 0;
 
     queue.push(id_from);
@@ -296,12 +319,12 @@ void Graph::path_to_next_unknown(int id_from, std::vector<int>& path)
         }
     }
 
-    //find closest nodes with an unknown direction
+    //find closest node where condition is true
     int i_min_dist = 0;
     float min_dist = std::numeric_limits<float>::infinity();
 
-    for (i = 0; i < _nodes.size(); ++i) {
-        if (has_unkown[i] && distances[i] < min_dist) {
+    for (int i = 0; i < _nodes.size(); ++i) {
+        if (filter[i] && distances[i] < min_dist) {
             min_dist = distances[i];
             i_min_dist = i;
         }
