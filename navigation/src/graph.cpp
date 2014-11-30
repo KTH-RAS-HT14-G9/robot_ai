@@ -89,7 +89,7 @@ void test_request(int id_prev, int dir, bool blocked_n, bool blocked_e, bool blo
 void test_graph() {
     navigation_msgs::PlaceNodeRequest place;
 
-    test_request(-1,-1, true, false, true, true, place);
+    test_request(-1,-1, false, false, true, true, place);
     _graph.place_node(0,0,place);
 
     test_request(0,Graph::East,false,true,true,false,place);
@@ -106,6 +106,12 @@ void test_graph() {
 
     test_request(4,Graph::North,true,true,false,false,place);
     _graph.place_node(2.5,1.5,place);
+
+    test_request(5,Graph::West,true,false,false,true,place);
+    _graph.place_node(0,1.5,place);
+
+    test_request(6,Graph::South,false,false,true,true,place);
+    _graph.place_node(0,0.1,place);
 
     std::vector<int> path;
     _graph.path_to_next_unknown(0,path);
