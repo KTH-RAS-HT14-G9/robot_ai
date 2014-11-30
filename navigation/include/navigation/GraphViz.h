@@ -21,16 +21,21 @@ protected:
             ,id_north(-1)
             ,id_east(-1)
             ,id_south(-1)
-            ,id_west(-1) {}
-        MarkerID(int id, int north, int east, int south, int west)
-            :id_node(id)
-            ,id_north(north)
-            ,id_east(east)
-            ,id_south(south)
-            ,id_west(west) {}
+            ,id_west(-1)
+            ,id_circle(-1)
+        {}
+//        MarkerID(int id, int north, int east, int south, int west)
+//            :id_node(id)
+//            ,id_north(north)
+//            ,id_east(east)
+//            ,id_south(south)
+//            ,id_west(west)
+//            ,id_circle(-1)
+//        {}
 
         int id_node;
         int id_north, id_east, id_south, id_west;
+        int id_circle;
     };
 
     void draw_node(int id, bool highlight);
@@ -100,7 +105,9 @@ void GraphViz::draw_node(int id, bool highlight)
     static common::Color color_w_obj_h(102,51,0);
 
     static common::Color color_edge(200,200,220);
-    static common::Color color_unknown(100,100,100);
+    static common::Color color_unknown(255,148,148);
+
+    static common::Color color_circle(148,180,255);
 
     static const float line_z = 0.025f;
 
@@ -119,6 +126,7 @@ void GraphViz::draw_node(int id, bool highlight)
     //draw node
     std::string label = ""+node.id_this;
     marker_id.id_node = _marker.add_cube(node.x,node.y,scale, color_node.r, color_node.g, color_node.b, label, marker_id.id_node);
+    marker_id.id_circle = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_circle.r, color_circle.g, color_circle.b, 50, marker_id.id_circle);
 
     //draw edges
     if (node.id_north >= NAV_GRAPH_UNKNOWN) {
