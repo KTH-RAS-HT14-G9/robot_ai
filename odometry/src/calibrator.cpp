@@ -24,12 +24,33 @@ int _phase;
 //------------------------------------------------------------------------------
 // Methods
 
+#include <iostream>
+#include <fstream>
+
+int write_result(double x, double y, double theta)
+{
+  using namespace std;
+  stringstream filename;
+  filename << "calibration_" << ros::Time::now().toNSec();
+
+  ofstream myfile;
+  myfile.open (filename.str());
+  myfile << "x= " << x << "\n";
+  myfile << "y= " << y << "\n";
+  myfile << "theta= " << theta << "\n";
+  myfile.close();
+  return 0;
+}
+
 bool advance_phase() {
 
     if (_phase == 8) {
         ROS_ERROR("Finished round trip. Current odometry: [%lf, %lf, %lf]", _x, _y, _theta);
+        write_result(_x,_y,_theta);
+        ++_phase;
         return false;
     }
+    else if (_phase > 8) return false;
 
     ++_phase;
 
@@ -105,7 +126,7 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
     transform.setRotation(_q);
     pub_tf.sendTransform(tf::StampedTransform(transform, _odom.header.stamp, "map", "robot"));
 
-    const double max_d = 3.9;
+    const double max_d = 3.94;
     if (sq_dist(_x,_y, _last_x,_last_y) >= max_d*max_d) {
         std_msgs::Bool deactivate;
         deactivate.data = false;
@@ -157,9 +178,10 @@ int main(int argc, char **argv)
 
     _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
     _pub_turn = n.advertise<std_msgs::Float64>("/controller/turn/angle",10);
-    _pub_fwd = n.advertise<std_msgs::Bool>("/controller/forward/active",10);
+    _pub_fwd = n.advertise<std_msgs::Bool>("/controller/forward/active",10,true);
 
     ros::param::set("/controller/forward/velocity",0.2);
+    advance_phase();
 
     ros::spin();
 
