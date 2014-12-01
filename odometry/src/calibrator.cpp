@@ -6,6 +6,9 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float64.h>
 
+#include <iostream>
+#include <fstream>
+
 //------------------------------------------------------------------------------
 // Members
 
@@ -24,9 +27,6 @@ int _phase;
 //------------------------------------------------------------------------------
 // Methods
 
-#include <iostream>
-#include <fstream>
-
 int write_result(double x, double y, double theta)
 {
   using namespace std;
@@ -34,7 +34,7 @@ int write_result(double x, double y, double theta)
   filename << "calibration_" << ros::Time::now().toNSec();
 
   ofstream myfile;
-  myfile.open (filename.str());
+  myfile.open (filename.str().c_str());
   myfile << "x= " << x << "\n";
   myfile << "y= " << y << "\n";
   myfile << "theta= " << theta << "\n";
