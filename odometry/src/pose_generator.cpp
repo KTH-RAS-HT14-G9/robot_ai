@@ -71,8 +71,12 @@ void send_marker(tf::Transform& transform) {
 void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
 {
     static tf::TransformBroadcaster pub_tf;
-    double dist_l = (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder1 / robot::prop::ticks_per_rev);
-    double dist_r = (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder2 / robot::prop::ticks_per_rev);
+
+    double c_l = 0.98416;
+    double c_r = 1.0538;
+
+    double dist_l = c_l * (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder1 / robot::prop::ticks_per_rev);
+    double dist_r = c_r * (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder2 / robot::prop::ticks_per_rev);
 
     _theta += (dist_r - dist_l) / robot::dim::wheel_distance;
 
