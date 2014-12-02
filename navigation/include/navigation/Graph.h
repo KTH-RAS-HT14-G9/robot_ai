@@ -61,7 +61,7 @@ protected:
 Graph::Graph()
     :_next_node_id(0)
     ,_dist_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance/2.0)
-    ,_update_positions("/navigation/graph/update_positions",true)
+    ,_update_positions("/navigation/graph/update_positions",false)
 {
 }
 
@@ -136,13 +136,15 @@ navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::Plac
         node.id_this = _nodes.size();
 
         _nodes.push_back(node);
+
+        if (_nodes.size() > 1) {
+            set_connected(request.id_previous, request.direction, node.id_this);
+        }
     }
     else {
+        ROS_INFO("On node %d", node.id_this);
         update_position(_nodes[node.id_this].x, _nodes[node.id_this].y, x, y);
     }
-
-    if (_nodes.size() > 1)
-        set_connected(request.id_previous, request.direction, node.id_this);
 
     return _nodes[node.id_this];
 }
@@ -209,6 +211,8 @@ bool Graph::on_node(float x, float y, navigation_msgs::Node &node)
             closest = i;
         }
     }
+
+    //ROS_INFO("Distance to node: ")
 
     if (min_dist < sq_dist_thresh) {
         node = _nodes[closest];

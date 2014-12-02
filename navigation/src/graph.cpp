@@ -31,6 +31,39 @@ void callback_odometry(const nav_msgs::OdometryConstPtr& odom) {
     _position = odom->pose.pose.position;
 }
 
+bool update_transform()
+{
+    static tf::TransformListener tf_listener;
+    try {
+        tf_listener.waitForTransform("map", "robot", ros::Time(0), ros::Duration(1.0) );
+        tf_listener.lookupTransform("map", "robot", ros::Time(0), _transform);
+    } catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what());
+        return false;
+    }
+    return true;
+}
+
+bool robotToMapTransform(float x, float y, float& map_x, float& map_y)
+{
+    if(!update_transform()) return false;
+
+    geometry_msgs::PointStamped robot_point_msg;
+    robot_point_msg.header.frame_id = "robot";
+    robot_point_msg.header.stamp = ros::Time::now();
+    robot_point_msg.point.x = x;
+    robot_point_msg.point.y = y;
+    robot_point_msg.point.z = 0.0;
+    tf::Stamped<tf::Point> robot_point;
+    tf::pointStampedMsgToTF(robot_point_msg, robot_point);
+    tf::Vector3 map_point = _transform*robot_point;
+
+    map_x = map_point.x();
+    map_y = map_point.y();
+
+    return true;
+}
+
 bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
                         navigation_msgs::PlaceNodeResponse& response)
 {
@@ -39,10 +72,32 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
         return false;
     }
 
-    response.generated_node = _graph.place_node(_position.x, _position.y, request);
-    if (request.object_here == true) _graph.place_object(response.generated_node.id_this, request);
+    bool success = true;
 
-    return true;
+    float x = _position.x;
+    float y = _position.y;
+
+    //if(robotToMapTransform(x,y, x,y))
+    {
+
+        response.generated_node = _graph.place_node(x, y, request);
+        if (request.id_previous >= 0) {
+            navigation_msgs::Node prev_node = _graph.get_node(request.id_previous);
+            ROS_INFO("Place node. %d(%.2f,%.2f) -> %d(%.2f,%.2f)", request.id_previous, prev_node.x,prev_node.y, response.generated_node.id_this, response.generated_node.x, response.generated_node.y);
+        }
+
+        if (request.object_here == true) {
+            if(robotToMapTransform(x,y, x,y)) {
+                robotToMapTransform(x,y, x,y);
+                _graph.place_object(response.generated_node.id_this, request);
+            }
+            else success = false;
+        }
+
+    }
+    //else success = false;
+
+    return success;
 }
 
 void init_path_to_noi(int id_from, int trait) {
@@ -164,35 +219,6 @@ void test_graph() {
     _graph.place_object(node.id_this,place);
 }
 
-bool update_transform()
-{
-    static tf::TransformListener tf_listener;
-    try {
-        tf_listener.waitForTransform("map", "robot", ros::Time(0), ros::Duration(1.0) );
-        tf_listener.lookupTransform("map", "robot", ros::Time(0), _transform);
-    } catch (tf::TransformException ex) {
-        ROS_ERROR("%s",ex.what());
-        return false;
-    }
-    return true;
-}
-
-void robotToMapTransform(float x, float y, float& map_x, float& map_y)
-{
-    geometry_msgs::PointStamped robot_point_msg;
-    robot_point_msg.header.frame_id = "robot";
-    robot_point_msg.header.stamp = ros::Time::now();
-    robot_point_msg.point.x = x;
-    robot_point_msg.point.y = y;
-    robot_point_msg.point.z = 0.0;
-    tf::Stamped<tf::Point> robot_point;
-    tf::pointStampedMsgToTF(robot_point_msg, robot_point);
-    tf::Vector3 map_point = _transform*robot_point;
-
-    map_x = map_point.x();
-    map_y = map_point.y();
-}
-
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "graph");
@@ -219,10 +245,10 @@ int main(int argc, char **argv)
 
     while(n.ok())
     {
-        if(test || update_transform()) {
-            float x = _position.x;
-            float y = _position.y;
-            if(!test) robotToMapTransform(x,y, x,y);
+        float x = _position.x;
+        float y = _position.y;
+        //if(robotToMapTransform(x,y, x,y))
+        {
 
             if (_graph.on_node(x,y, node)) {
                 _pub_on_node.publish(node);
@@ -230,6 +256,7 @@ int main(int argc, char **argv)
             }
 
             _graph_viz->draw();
+
         }
 
         ros::spinOnce();
