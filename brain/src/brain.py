@@ -34,7 +34,7 @@ NORTH=0
 EAST=1
 SOUTH=2
 WEST=3
-current_direction = 0
+current_direction = WEST
 object_x = -1
 object_y = -1
 node_detected = False
@@ -84,7 +84,7 @@ class Explore(smach.State):
         elif ObstacleAhead():
             rospy.loginfo("EXPLORE ==> OBSTACLE_DETECTED")
             return 'obstacle_detected'        
-        elif IsAtIntersection():
+        elif IsAtIntersection() and CurrentNodeNotHere():
             #rospy.loginfo("EXPLORE ==> INTERSECTION_DETECTED")
             #return 'intersection_detected'
             rospy.loginfo("Is at intersection, placing node")
@@ -181,6 +181,12 @@ class FollowGraph(smach.State):
         return 'follow_graph'
 
 ######################## FUNCTIONS #########################
+
+def CurrentNodeNotHere():
+    x = odom.pose.pose.position.x
+    y = odom.pose.pose.position.y
+    dist = math.sqrt(math.pow(x-current_node.x, 2) + math.pow(y-current_node.y, 2))
+    return dist > 0.1
 
 def GetDirectionTo(node):
     if node.id_north == current_node.id_this:
