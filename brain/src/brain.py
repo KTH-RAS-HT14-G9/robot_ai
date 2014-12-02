@@ -35,6 +35,8 @@ EAST=1
 SOUTH=2
 WEST=3
 current_direction = 0
+object_x = -1
+object_y = -1
 node_detected = False
 reset_mc_pub = None
 recognize_object_pub = None
@@ -207,7 +209,7 @@ def GetNextNodeOfInterest():
 def PlaceNode(object_here):
     global current_node
     #TODO: Fill interface with object information
-    response = place_node.call(PlaceNodeRequest(current_node.id_this, current_direction, NorthBlocked(), EastBlocked(), SouthBlocked(), WestBlocked(), object_here, -1, EAST, 0, 0))
+    response = place_node.call(PlaceNodeRequest(current_node.id_this, current_direction, NorthBlocked(), EastBlocked(), SouthBlocked(), WestBlocked(), object_here, object_type, current_direction, object_x, object_y))
     current_node = response.generated_node
 
 def NorthBlocked():
@@ -374,11 +376,11 @@ def IRCallback(data):
     r_front_ir = data.r_front;
 
 def ObjectOrientationCallback(data):
-    global object_angle,object_type
+    global object_angle,object_type, object_x, object_y
     object_type=data.type
-    x=data.x
-    y=data.y
-    object_angle=atan(y,x)
+    object_x=data.x
+    object_y=data.y
+    object_angle=atan2(object_y,object_x)
     if object_angle>(pi/2):
        object_angle=object_angle-pi
        object_angle=180*(object_angle/pi)
