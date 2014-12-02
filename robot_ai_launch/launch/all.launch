@@ -3,6 +3,6 @@
 	<!-- <node pkg="ras_espeak" type="espeak_node" name="espeak_node" /> -->
 
 	<include file="$(find controllers_launch)/launch/controllers.launch" />
-	<include file="$(find vision_launch)/launch/vision.launch" />
+	<!--<include file="$(find vision_launch)/launch/vision.launch" />-->
 	<include file="$(find robot_ai_launch)/launch/ai.launch" />
 </launch>
