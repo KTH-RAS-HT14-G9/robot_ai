@@ -69,7 +69,7 @@ bool advance_phase() {
         ROS_ERROR("Commencing phase %d. Turning by 90 degrees.", _phase);
 
         std_msgs::Float64 angle;
-        angle.data = 90.0f;
+        angle.data = -90.0f;
         _pub_turn.publish(angle);
     }
 

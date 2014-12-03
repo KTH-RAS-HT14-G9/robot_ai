@@ -38,7 +38,7 @@ public:
 
     int num_nodes() {return _nodes.size();}
 
-    double get_dist_thresh() {return _dist_thresh();}
+    double get_dist_thresh() {return _merge_thresh();}
 
 protected:
 
@@ -54,13 +54,14 @@ protected:
     std::vector<navigation_msgs::Node> _nodes;
     int _next_node_id;
 
-    Parameter<double> _dist_thresh;
+    //Parameter<double> _dist_thresh;
+    Parameter<double> _merge_thresh;
     Parameter<bool> _update_positions;
 };
 
 Graph::Graph()
     :_next_node_id(0)
-    ,_dist_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance/2.0)
+    ,_merge_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance/2.0)
     ,_update_positions("/navigation/graph/update_positions",false)
 {
 }
@@ -195,7 +196,7 @@ double sq_dist(double x0, double y0, double x1, double y1)
 
 bool Graph::on_node(float x, float y, navigation_msgs::Node &node)
 {
-    double sq_dist_thresh = _dist_thresh();
+    double sq_dist_thresh = _merge_thresh();
     sq_dist_thresh *= sq_dist_thresh;
 
     int i = 0;
