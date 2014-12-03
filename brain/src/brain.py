@@ -5,9 +5,7 @@ import smach
 import smach_ros
 import sys
 import time
-from math import atan2
-from math import pi
-from math import fabs
+import math
 from std_msgs.msg import Float64
 from std_msgs.msg import String
 from std_msgs.msg import Bool
@@ -40,7 +38,7 @@ EAST=1
 SOUTH=2
 WEST=3
 
-current_direction = WEST
+current_direction = EAST
 object_x = -1
 object_y = -1
 node_detected = False
@@ -51,7 +49,7 @@ follow_wall_pub = None
 go_forward_pub = None
 
 turn_threshold = 0.35
-obstacle_threshold = 0.30
+obstacle_threshold = 0.25
 fl_ir = 0
 fr_ir = 0
 bl_ir = 0
@@ -408,6 +406,7 @@ def ObjectOrientationCallback(data):
     object_x=data.x
     object_y=data.y
     object_angle=atan2(object_y,object_x)
+
     if object_angle>(pi/2):
        object_angle=object_angle-pi
        object_angle=180*(object_angle/pi)
@@ -455,6 +454,9 @@ def main(argv):
             'follow_graph' : 'FOLLOW_GRAPH'})
 
     rospy.sleep(3.0)
+
+    PlaceNode(False)
+
     outcome = sm.execute() 
 
 #if __name__ == '__main__':

@@ -9,7 +9,10 @@
 	<node pkg="odometry" type="pose_generator" name="pose_generator" />
 
 	<!-- launch mapping -->
-	<node pkg="mapping" type="mapping" name="mapping" output="screen"/>
+	<node pkg="mapping" type="mapping" name="mapping"/>
+
+	<!-- launch graph
+	<node pkg="navigation" type="graph" name="graph"/> -->
 
 	<!-- launch brain -->
 	<node pkg="brain" type="brain.py" name="brain" output="screen"/>
