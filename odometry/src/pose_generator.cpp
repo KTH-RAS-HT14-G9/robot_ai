@@ -255,7 +255,8 @@ double get_x_diff()
         double dist_to_obstacle;
         if (request_raycast(0,0,1,0,dist_to_obstacle))
         {
-            return dist_to_plane - dist_to_obstacle;
+            ROS_ERROR("Dist to obstacle: %.3lf, to plane: %.3lf",dist_to_obstacle, dist_to_plane);
+            return dist_to_obstacle - dist_to_plane;
         }
         else
             return std::numeric_limits<double>::quiet_NaN();
@@ -275,7 +276,6 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
         if (_iteration >= _max_iterations()) {
 
             _ir_dist /= _iteration;
-            std::cout << "Distances div: " << _ir_dist << std::endl;
 
             double dx = robot::ir::offset_front_left_forward + robot::ir::offset_rear_left_forward;
             double dy = get_dy(_ir_dist);
@@ -296,28 +296,6 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
 
             _correct_theta = false;
             _iteration = 0;
-        }
-    }
-    else if (_correct_lateral)
-    {
-        _correct_lateral = false;
-
-        _ir_dist = pack_matrix(distances);
-
-        double x_diff = get_x_diff();
-        //double y_diff = get_y_diff(_ir_dist);
-
-        if (std::abs(x_diff) < 0.1) {
-            double dx = cos(_theta);
-            double dy = sin(_theta);
-
-            double new_x = _x + x_diff*dx;
-            double new_y = _y + x_diff*dy;
-
-            ROS_ERROR("corrected position (%.3lf,%.3lf) -> (%.3lf,%.3lf)", _x, _y, new_x, new_y);
-
-            _x = new_x;
-            _y = new_y;
         }
     }
     else
@@ -384,10 +362,33 @@ void callback_planes(const vision_msgs::PlanesConstPtr& planes)
         _front_plane = planes->planes[ortho_plane];
         _see_front_plane = true;
 
-        ROS_ERROR("Dist to front wall: %.3lf",get_x_diff());
+        if (_correct_lateral)
+        {
+            ROS_ERROR("Attempt to correct position based on wall");
+
+            _correct_lateral = false;
+
+            double x_diff = get_x_diff();
+            ROS_ERROR("x diff = %.3lf",x_diff);
+
+            if (std::abs(x_diff) < 0.1) {
+                double dx = cos(_theta);
+                double dy = sin(_theta);
+
+                double new_x = _x + x_diff*dx;
+                double new_y = _y + x_diff*dy;
+
+                ROS_ERROR("corrected position (%.3lf,%.3lf) -> (%.3lf,%.3lf)", _x, _y, new_x, new_y);
+
+                _x = new_x;
+                _y = new_y;
+            }
+        }
     }
     else {
         _see_front_plane = false;
+
+        if (_correct_lateral) _correct_lateral = false;
     }
 }
 
