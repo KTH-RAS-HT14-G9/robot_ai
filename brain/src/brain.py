@@ -203,7 +203,6 @@ def GetNextNodeOfInterest():
 
 def PlaceNode(object_here):
     global current_node
-    #TODO: Fill interface with object information
     response = place_node.call(PlaceNodeRequest(current_node.id_this, current_direction, NorthBlocked(), EastBlocked(), SouthBlocked(), WestBlocked(), object_here, object_type, current_direction, object_x, object_y))
     current_node = response.generated_node
 
@@ -337,8 +336,8 @@ def ResetMotorController():
 
 def IsAtIntersection():
     if not ObstacleAhead() and (CanTurnRight() or CanTurnLeft()):
-            if not (current_node.west_blocked == ObstacleInDir(MapDirToRobotDir(WEST)) and 
-            current_node.east_blocked == ObstacleInDir(MapDirToRobotDir(EAST))):
+            if not ((current_node.id_west==-2) == ObstacleInDir(MapDirToRobotDir(WEST)) and 
+            (current_node.id_east==-2) == ObstacleInDir(MapDirToRobotDir(EAST))):
                 return True
     return False
 
@@ -428,7 +427,7 @@ def main(argv):
     global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub, reset_mc_pub, fetch_objects
     rospy.init_node('brain')
 
-    if(len(argv) > 1 and argv[1] == 'fetch'):
+    if len(argv) > 1 and argv[1] == 'fetch':
         fetch_objects = True
     
     sm = smach.StateMachine(outcomes=['finished'])
@@ -459,4 +458,4 @@ def main(argv):
     outcome = sm.execute() 
 
 #if __name__ == '__main__':
-main()
+main(sys.argv)
