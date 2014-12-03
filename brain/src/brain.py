@@ -30,10 +30,16 @@ rospy.wait_for_service('/navigation/graph/next_node_of_interest')
 place_node = rospy.ServiceProxy('/navigation/graph/place_node', navigation_msgs.srv.PlaceNode)
 next_node_of_interest = rospy.ServiceProxy('/navigation/graph/next_node_of_interest', navigation_msgs.srv.NextNodeOfInterest)
 
+FORWARD = 0
+RIGHT = 1
+BACKWARDS = 2
+LEFT = 3
+
 NORTH=0
 EAST=1
 SOUTH=2
 WEST=3
+
 current_direction = WEST
 object_x = -1
 object_y = -1
@@ -63,14 +69,17 @@ object_type=-1
 object_angle=0
 time_start=0
 angle_record=0
+fetch_objects = False
 
 ######################## STATES #########################
 
 class Explore(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['explore','obstacle_detected', 'object_detected', 'intersection_detected', 'follow_graph'])
+        smach.State.__init__(self, outcomes=['explore','obstacle_detected', 'object_detected', 'follow_graph', 'finished'])
 
     def execute(self, userdata):
+        if rospy.is_shutdown():
+            return 'finished';
         fam_node_seen = node_detected
         ResetFamiliarNodeDetected()
         FollowWall(True)
@@ -84,9 +93,7 @@ class Explore(smach.State):
         elif ObstacleAhead():
             rospy.loginfo("EXPLORE ==> OBSTACLE_DETECTED")
             return 'obstacle_detected'        
-        elif IsAtIntersection() and CurrentNodeNotHere():
-            #rospy.loginfo("EXPLORE ==> INTERSECTION_DETECTED")
-            #return 'intersection_detected'
+        elif IsAtIntersection():
             rospy.loginfo("Is at intersection, placing node")
             PlaceNode(False)
         return 'explore'    
@@ -137,22 +144,6 @@ class ObjectDetected(smach.State):
         ResetFamiliarNodeDetected()
         return 'explore'
 
-class IntersectionDetected(smach.State):
-    def __init__(self):
-        smach.State.__init__(self, outcomes=['explore'])
-
-    def execute(self, userdata):
-        PlaceNode(False)   
-        
-        while IsAtIntersection():
-            if ObstacleAhead():
-                break
-            rospy.sleep(waiting_time)
-
-        ResetFamiliarNodeDetected()
-        rospy.loginfo("INTERSECTION_DETECTED ==> EXPLORE")
-        return 'explore'
-
 class FollowGraph(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['explore', 'follow_graph'])
@@ -161,6 +152,7 @@ class FollowGraph(smach.State):
         
         next_node = GetNextNodeOfInterest()
         if(next_node.id_this == current_node.id_this):
+            rospy.loginfo("Destination reached")
             rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
             return 'explore'
         angle = GetAngleTo(GetDirectionTo(next_node))
@@ -181,12 +173,6 @@ class FollowGraph(smach.State):
         return 'follow_graph'
 
 ######################## FUNCTIONS #########################
-
-def CurrentNodeNotHere():
-    x = odom.pose.pose.position.x
-    y = odom.pose.pose.position.y
-    dist = math.sqrt(math.pow(x-current_node.x, 2) + math.pow(y-current_node.y, 2))
-    return dist > 0.1
 
 def GetDirectionTo(node):
     if node.id_north == current_node.id_this:
@@ -209,7 +195,10 @@ def RecognizedBefore():
     return current_node.object_here
 
 def GetNextNodeOfInterest():
-    return next_node_of_interest.call(NextNodeOfInterestRequest(current_node.id_this, 0)).target_node
+    mode = 0
+    if fetch_objects:
+        mode = 1
+    return next_node_of_interest.call(NextNodeOfInterestRequest(current_node.id_this, mode)).target_node
 
 
 def PlaceNode(object_here):
@@ -347,7 +336,40 @@ def ResetMotorController():
     rospy.loginfo("Resetting MC pid")
 
 def IsAtIntersection():
-    return True if not ObstacleAhead() and (CanTurnRight() or CanTurnLeft()) else False
+    if not ObstacleAhead() and (CanTurnRight() or CanTurnLeft()):
+            if not (current_node.west_blocked == ObstacleInDir(MapDirToRobotDir(WEST)) and 
+            current_node.east_blocked == ObstacleInDir(MapDirToRobotDir(EAST))):
+                return True
+    return False
+
+def ObstacleInDir(robot_dir):
+    if robot_dir == LEFT:
+        return not CanTurnLeft()
+    if robot_dir == RIGHT:
+        return not CanTurnRight()
+    if robot_dir == FORWARD:
+        return ObstacleAhead()
+    # TODO handle backwards with grid map
+    return True
+
+
+def RobotDirToMapDir(robot_dir):
+    if current_direction == NORTH:
+        return robot_dir
+    if current_direction == WEST:
+        return (robot_dir + 3) % 4
+    if current_direction == SOUTH:
+        return (robot_dir + 2) % 4
+    return (robot_dir + 1) % 4 
+
+def MapDirToRobotDir(map_dir):
+    if current_direction == NORTH:
+        return map_dir
+    if current_direction == WEST:
+        return (map_dir + 1) % 4
+    if current_direction == SOUTH:
+        return (map_dir + 2) % 4
+    return (map_dir + 3) % 4
 
 ################### CALLBACKS #############################
 
@@ -402,10 +424,12 @@ def OdometryCallback(data):
     global odometry
     odometry = data
 
-def main():
-    global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub, reset_mc_pub
+def main(argv):
+    global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub, reset_mc_pub, fetch_objects
     rospy.init_node('brain')
 
+    if(len(argv) > 1 and argv[1] == 'fetch'):
+        fetch_objects = True
     
     sm = smach.StateMachine(outcomes=['finished'])
     rospy.Subscriber("/perception/ir/distance", Distance, IRCallback)
@@ -424,16 +448,13 @@ def main():
     reset_mc_pub = rospy.Publisher("controller/motor/reset", Bool, queue_size=1)
 
     with sm:
-        smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED',
-            'intersection_detected' : 'INTERSECTION_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
-            'object_detected' : 'OBJECT_DETECTED'})
+        smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
+            'object_detected' : 'OBJECT_DETECTED', 'finished':'finished'})
         smach.StateMachine.add('OBSTACLE_DETECTED', ObstacleDetected(), transitions={'explore': 'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED'})
         smach.StateMachine.add('OBJECT_DETECTED', ObjectDetected(), transitions={'explore': 'EXPLORE'})
-        smach.StateMachine.add('INTERSECTION_DETECTED', IntersectionDetected(), transitions={'explore': 'EXPLORE'})
         smach.StateMachine.add('FOLLOW_GRAPH', FollowGraph(), transitions={'explore' : 'EXPLORE',
             'follow_graph' : 'FOLLOW_GRAPH'})
 
-    
     rospy.sleep(3.0)
     outcome = sm.execute() 
 
