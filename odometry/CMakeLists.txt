@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(odometry)
 
+set(CMAKE_BUILD_TYPE Debug)
+
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -109,6 +111,7 @@ include_directories(
 
 ## Declare a cpp executable
 # add_executable(odometry_node src/odometry_node.cpp)
+add_executable(calibrator src/calibrator.cpp)
 add_executable(pose_generator src/pose_generator.cpp)
 
 ## Add cmake target dependencies of the executable/library
@@ -119,6 +122,9 @@ add_executable(pose_generator src/pose_generator.cpp)
 # target_link_libraries(odometry_node
 #   ${catkin_LIBRARIES}
 # )
+target_link_libraries(calibrator
+  ${catkin_LIBRARIES}
+)
 target_link_libraries(pose_generator
   ${catkin_LIBRARIES}
   ${common_LIBRARIES}

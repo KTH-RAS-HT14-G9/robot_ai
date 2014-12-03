@@ -1,0 +1,14 @@
+float32 origin_x
+float32 origin_y
+
+float32 dir_x
+float32 dir_y
+
+float32 max_length
+
+---
+
+bool hit
+float32 hit_x
+float32 hit_y
+float32 hit_dist

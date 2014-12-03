@@ -35,7 +35,7 @@ protected:
     void draw_node(int id, bool highlight);
     void adjust_data_size();
 
-    Graph _graph;
+    Graph& _graph;
     std::vector<bool> _node_clean;
     std::vector<bool> _highlight;
     std::vector<MarkerID> _marker_ids;
@@ -174,6 +174,9 @@ void GraphViz::draw_node(int id, bool highlight)
 void GraphViz::highlight_node(int id, bool flag)
 {
     adjust_data_size();
+    if (id >= _graph.num_nodes())
+        return;
+
     _highlight.at(id) = flag;
     _node_clean.at(id) = false;
 }
