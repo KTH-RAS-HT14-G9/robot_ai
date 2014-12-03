@@ -31,7 +31,8 @@ Mapping::Mapping() :
     fl_ir_reading(INVALID_READING), fr_ir_reading(INVALID_READING),
     bl_ir_reading(INVALID_READING), br_ir_reading(INVALID_READING),
     pos(Point<double>(0.0,0.0)), turning(false),
-    wall_planes(new std::vector<common::vision::SegmentedPlane>())
+    wall_planes(new std::vector<common::vision::SegmentedPlane>()),
+    markers("map","raycasts")
 {
     handle = ros::NodeHandle("");
     distance_sub = handle.subscribe("/perception/ir/distance", 1, &Mapping::distanceCallback, this);
@@ -41,6 +42,7 @@ Mapping::Mapping() :
      wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
    // object_sub = handle.subscribe("/vision/object/position", 1, &Mapping::objectDetectedCallback, this);
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
+    pub_viz = handle.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",10);
     
     srv_raycast = handle.advertiseService("/mapping/raycast", &Mapping::performRaycast, this);
 
@@ -314,6 +316,8 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
     Point<double> p1 = robotToMapTransform(robot_p1);
     Point<double> p2 = robotToMapTransform(robot_p2);
 
+    markers.add_line(p1.x,p1.y,p2.x,p2.y,0.1,0.01,255,0,0);
+
     std::vector<Point<int> > obstacle_points;
 
     //line draw algorithm again to find obstacles
@@ -363,6 +367,9 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
 
         response.hit_dist = (hit_p - Eigen::Vector2d(p1.x, p1.y)).norm();
     }
+
+    pub_viz.publish(markers.get());
+    markers.clear();
 
     return true;
 
