@@ -18,6 +18,7 @@
 #include <std_msgs/Float64.h>
 #include <std_msgs/Bool.h>
 #include <common/segmented_plane.h>
+#include <navigation_msgs/Raycast.h>
 
 using std::vector;
 
@@ -40,6 +41,8 @@ public:
     void startTurnCallback(const std_msgs::Float64::ConstPtr&);
     void stopTurnCallback(const std_msgs::Bool::ConstPtr&);
     void wallDetectedCallback(const vision_msgs::Planes::ConstPtr&);
+    bool performRaycast(navigation_msgs::RaycastRequest &request,
+                        navigation_msgs::RaycastResponse &response);
     //void objectDetectedCallback(const );
     void updateGrid();
     void publishMap();
@@ -59,6 +62,7 @@ private:
     void initProbabilityGrid();
     void initOccupancyGrid();
     void updateWalls();
+    bool isObstacle(int x, int y);
 
     ros::NodeHandle handle;
     ros::Subscriber distance_sub;
@@ -70,6 +74,9 @@ private:
     ros::Publisher map_pub;
     tf::TransformListener tf_listener;
     tf::StampedTransform transform;
+
+    ros::ServiceServer srv_raycast;
+    ros::ServiceServer srv_fit;
 
     common::vision::SegmentedPlane::ArrayPtr wall_planes;
 

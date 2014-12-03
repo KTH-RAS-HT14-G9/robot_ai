@@ -20,6 +20,8 @@ add_service_files(
   FILES
   PlaceNode.srv
   NextNodeOfInterest.srv
+  Raycast.srv
+  FitBlob.srv
 )
 
 ## Generate actions in the 'action' folder

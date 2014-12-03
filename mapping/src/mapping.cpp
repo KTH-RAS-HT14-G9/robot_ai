@@ -42,6 +42,8 @@ Mapping::Mapping() :
    // object_sub = handle.subscribe("/vision/object/position", 1, &Mapping::objectDetectedCallback, this);
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
     
+    srv_raycast = handle.advertiseService("/mapping/raycast", &Mapping::performRaycast, this);
+
     occupancy_grid.header.frame_id = "world";
     nav_msgs::MapMetaData metaData;
     metaData.resolution = 0.01;
@@ -274,4 +276,94 @@ int main(int argc, char **argv)
         ros::spinOnce();
         loop_rate.sleep();
     }
+}
+
+bool Mapping::isObstacle(int x, int y)
+{
+    if (y < 0 || y >= prob_grid.size())
+        return false;
+    if (x < 0 || x >= prob_grid[y].size())
+        return false;
+
+    if(prob_grid[y][x] > FREE_OCCUPIED_THRESHOLD)
+        return true;
+}
+
+void addPointToList(std::vector<Point<int> >& list, int x, int y)
+{
+    if (!list.empty()) {
+        Point<int> p(x,y);
+        Point<int>& last = list[list.size()-1];
+
+        if (p.x != last.x || p.y != last.y)
+            list.push_back(p);
+    }
+    else list.push_back(Point<int>(x,y));
+}
+
+bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigation_msgs::RaycastResponse &response)
+{
+    Eigen::Vector2f origin(request.origin_x, request.origin_y);
+    Eigen::Vector2f dir(request.dir_x, request.dir_y);
+    dir.normalize();
+    dir *= request.max_length;
+
+    Point<double> robot_p1(origin(0), origin(1));
+    Point<double> robot_p2(origin(0) + dir(0), origin(1) + dir(1));
+
+    Point<double> p1 = robotToMapTransform(robot_p1);
+    Point<double> p2 = robotToMapTransform(robot_p2);
+
+    std::vector<Point<int> > obstacle_points;
+
+    //line draw algorithm again to find obstacles
+    Point<double>& min = p1.x <= p2.x ? p1 : p2;
+    Point<double>& max = p1.x > p2.x ? p1 : p2;
+    double dx = max.x-min.x;
+    double dy = max.y-min.y;
+
+    if(dx < 0.01) {
+        min = p1.y <= p2.y ? p1 : p2;
+        max = p1.y > p2.y ? p1 : p2;
+        double x = min.x;
+        for(double y = min.y; y < max.y; y +=0.01)
+        {
+            double cell_x = round(x*100.0);
+            double cell_y = round(y*100.0);
+            if (isObstacle(cell_x,cell_y)) {
+                addPointToList(obstacle_points, x, y);
+                if(obstacle_points.size() >= 3)
+                    break;
+            }
+        }
+    } else {
+        for(double x = min.x; x < max.x; x+=0.01)
+        {
+            double y = min.y + dy * (x-min.x) / dx;
+
+            double cell_x = round(x*100.0);
+            double cell_y = round(y*100.0);
+            if (isObstacle(cell_x,cell_y)) {
+                addPointToList(obstacle_points, x, y);
+                if(obstacle_points.size() >= 3)
+                    break;
+            }
+        }
+    }
+
+    response.hit = false;
+
+    if (obstacle_points.size() >= 3) {
+        response.hit = true;
+
+        Eigen::Vector2d hit_p(obstacle_points.begin()->x, obstacle_points.begin()->y);
+        //TODO: Transform back to robot coordinates
+        response.hit_x = hit_p(0);
+        response.hit_y = hit_p(1);
+
+        response.hit_dist = (hit_p - Eigen::Vector2d(p1.x, p1.y)).norm();
+    }
+
+    return true;
+
 }
