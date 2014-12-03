@@ -8,6 +8,8 @@
 #include <std_msgs/Float64.h>
 #include <ir_converter/Distance.h>
 #include <common/parameter.h>
+#include <navigation_msgs/Raycast.h>
+#include <vision_msgs/Planes.h>
 
 #define RAD2DEG(x) ((x)*M_PI/180.0)
 #define DEG2RAD(x) ((x)*180.0/M_PI)
@@ -23,13 +25,17 @@ nav_msgs::Odometry _odom;
 
 //ir_converter::Distance _ir_dist;
 Eigen::Matrix<double,4,1> _ir_dist;
-bool _correct_theta;
+bool _correct_theta, _correct_lateral;
 int _iteration;
 double _turn_accum;
 int _heading;
 
+bool _see_front_plane;
+vision_msgs::Plane _front_plane;
+
 ros::Publisher _pub_odom;
 ros::Publisher _pub_viz;
+ros::ServiceClient _srv_raycast;
 
 //------------------------------------------------------------------------------
 // Methods
@@ -143,6 +149,121 @@ double get_dy(Eigen::Matrix<double,4,1>& m)
         return std::numeric_limits<double>::quiet_NaN();
 }
 
+bool request_raycast(double x, double y, double dir_x, double dir_y, double& dist)
+{
+    navigation_msgs::RaycastRequest request;
+    navigation_msgs::RaycastResponse response;
+
+    request.origin_x = x;
+    request.origin_y = y;
+    request.dir_x = dir_x;
+    request.dir_y = dir_y;
+    request.max_length = 0.5;
+
+    response.hit = false;
+    _srv_raycast.call(request, response);
+
+    if (response.hit) {
+        dist = response.hit_dist;
+        return true;
+    }
+
+    return false;
+}
+
+bool request_raycast_fl(double ir_dist, double& dist)
+{
+    double x = robot::ir::offset_front_left_forward;
+    double y = ir_dist;
+
+    double dir_x = 0;
+    double dir_y = 1;
+
+    return request_raycast(x,y, dir_x,dir_y, dist);
+}
+
+bool request_raycast_fr(double ir_dist, double& dist)
+{
+    double x = robot::ir::offset_front_right_forward;
+    double y = ir_dist;
+
+    double dir_x = 0;
+    double dir_y = -1;
+
+    return request_raycast(x,y, dir_x,dir_y, dist);
+}
+
+bool request_raycast_bl(double ir_dist, double& dist)
+{
+    double x = robot::ir::offset_rear_left_forward;
+    double y = ir_dist;
+
+    double dir_x = 0;
+    double dir_y = 1;
+
+    return request_raycast(x,y, dir_x,dir_y, dist);
+}
+
+bool request_raycast_br(double ir_dist, double& dist)
+{
+    double x = robot::ir::offset_rear_right_forward;
+    double y = ir_dist;
+
+    double dir_x = 0;
+    double dir_y = 1;
+
+    return request_raycast(x,y, dir_x,dir_y, dist);
+}
+
+double get_y_diff(Eigen::Matrix<double,4,1>& m)
+{
+    if (wall_close(m(0,0), m(1,0) )) {
+        double fl_dist, bl_dist;
+        if (!request_raycast_fl(m(0,0), fl_dist))
+            return std::numeric_limits<double>::quiet_NaN();
+
+        if (!request_raycast_bl(m(1,0), bl_dist))
+            return std::numeric_limits<double>::quiet_NaN();
+
+        double avg_ray = (fl_dist+bl_dist)/2.0;
+        double avg_ir = (m(0,0) + m(1,0))/2.0;
+
+        return avg_ir - avg_ray;
+    }
+    else if (wall_close(m(2,0), m(3,0))) {
+        double fr_dist, br_dist;
+        if (!request_raycast_fl(m(2,0), fr_dist))
+            return std::numeric_limits<double>::quiet_NaN();
+
+        if (!request_raycast_bl(m(3,0), br_dist))
+            return std::numeric_limits<double>::quiet_NaN();
+
+        double avg_ray = (fr_dist+br_dist)/2.0;
+        double avg_ir = (m(2,0) + m(3,0))/2.0;
+
+        return avg_ir - avg_ray;
+    }
+    else
+        return std::numeric_limits<double>::quiet_NaN();
+}
+
+double get_x_diff()
+{
+    if (_see_front_plane)
+    {
+        double dist_to_plane = _front_plane.bounding_box[0]/*x*/;
+        double dist_to_obstacle;
+        if (request_raycast(0,0,1,0,dist_to_obstacle))
+        {
+            return dist_to_plane - dist_to_obstacle;
+        }
+        else
+            return std::numeric_limits<double>::quiet_NaN();
+    }
+    else
+        return std::numeric_limits<double>::quiet_NaN();
+}
+
 void callback_ir(const ir_converter::DistanceConstPtr& distances)
 {
     if (_correct_theta)
@@ -171,8 +292,32 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
             ROS_ERROR("corrected theta %.3lf -> %.3lf", RAD2DEG(_theta), RAD2DEG(new_theta));
             _theta = new_theta;
 
+            _correct_lateral = true;
+
             _correct_theta = false;
             _iteration = 0;
+        }
+    }
+    else if (_correct_lateral)
+    {
+        _correct_lateral = false;
+
+        _ir_dist = pack_matrix(distances);
+
+        double x_diff = get_x_diff();
+        //double y_diff = get_y_diff(_ir_dist);
+
+        if (std::abs(x_diff) < 0.1) {
+            double dx = cos(_theta);
+            double dy = sin(_theta);
+
+            double new_x = _x + x_diff*dx;
+            double new_y = _y + x_diff*dy;
+
+            ROS_ERROR("corrected position (%.3lf,%.3lf) -> (%.3lf,%.3lf)", _x, _y, new_x, new_y);
+
+            _x = new_x;
+            _y = new_y;
         }
     }
     else
@@ -213,6 +358,39 @@ void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
     _heading = ( (_heading+2)%4 ) - 2;
 }
 
+void callback_planes(const vision_msgs::PlanesConstPtr& planes)
+{
+    //find wall that is perpendicular to the robots direction
+    double max_dot = 0.0;
+    int ortho_plane = 0;
+    for(int i = 0; i < planes->planes.size(); ++i)
+    {
+        const vision_msgs::Plane& plane = planes->planes[i];
+        if (plane.is_ground_plane) continue;
+
+        Eigen::Vector3f plane_normal(plane.plane_coefficients[0],
+                                     plane.plane_coefficients[1],
+                                     plane.plane_coefficients[2]);
+        Eigen::Vector3f forward(1,0,0);
+
+        double dotprod = std::abs(forward.dot(plane_normal));
+        if (dotprod > max_dot) {
+            max_dot = dotprod;
+            ortho_plane = i;
+        }
+    }
+
+    if (max_dot > 0.9) {
+        _front_plane = planes->planes[ortho_plane];
+        _see_front_plane = true;
+
+        ROS_ERROR("Dist to front wall: %.3lf",get_x_diff());
+    }
+    else {
+        _see_front_plane = false;
+    }
+}
+
 //------------------------------------------------------------------------------
 // Entry point
 
@@ -226,16 +404,22 @@ int main(int argc, char **argv)
     _x = _y = 0;
     _theta = 0;
     _correct_theta = false;
+    _correct_lateral = false;
     _iteration = 0;
     _turn_accum = 0;
     _heading = 0;
+
+    _see_front_plane = false;
 
     ros::Subscriber sub_enc = n.subscribe("/arduino/encoders",10,callback_encoders);
     ros::Subscriber sub_turn_angle = n.subscribe("/controller/turn/angle",10,callback_turn_angle);
     ros::Subscriber sub_turn_done = n.subscribe("/controller/turn/done",10,callback_turn_done);
     ros::Subscriber sub_ir = n.subscribe("/perception/ir/distance",10,callback_ir);
+    ros::Subscriber sub_planes = n.subscribe("/vision/obstacles/planes",10,callback_planes);
     _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
     _pub_viz = n.advertise<visualization_msgs::Marker>( "visualization_marker", 0 );
+
+    _srv_raycast = n.serviceClient<navigation_msgs::Raycast>("/mapping/raycast",true);
 
     ros::spin();
 
