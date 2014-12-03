@@ -158,7 +158,7 @@ bool request_raycast(double x, double y, double dir_x, double dir_y, double& dis
     request.origin_y = y;
     request.dir_x = dir_x;
     request.dir_y = dir_y;
-    request.max_length = 0.5;
+    request.max_length = 1.0;
 
     response.hit = false;
     _srv_raycast.call(request, response);
@@ -258,8 +258,10 @@ double get_x_diff()
             ROS_ERROR("Dist to obstacle: %.3lf, to plane: %.3lf",dist_to_obstacle, dist_to_plane);
             return dist_to_obstacle - dist_to_plane;
         }
-        else
+        else {
+            ROS_ERROR("Raycast didn't hit");
             return std::numeric_limits<double>::quiet_NaN();
+        }
     }
     else
         return std::numeric_limits<double>::quiet_NaN();
