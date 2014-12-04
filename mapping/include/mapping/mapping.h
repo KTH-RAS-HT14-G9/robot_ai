@@ -19,6 +19,7 @@
 #include <std_msgs/Bool.h>
 #include <common/segmented_plane.h>
 #include <navigation_msgs/Raycast.h>
+#include <navigation_msgs/FitBlob.h>
 #include <common/marker_delegate.h>
 
 using std::vector;
@@ -44,6 +45,8 @@ public:
     void wallDetectedCallback(const vision_msgs::Planes::ConstPtr&);
     bool performRaycast(navigation_msgs::RaycastRequest &request,
                         navigation_msgs::RaycastResponse &response);
+    bool serviceFitRequest(navigation_msgs::FitBlobRequest& request,
+                           navigation_msgs::FitBlobResponse& response);
     //void objectDetectedCallback(const );
     void updateGrid();
     void publishMap();

@@ -45,6 +45,7 @@ Mapping::Mapping() :
     pub_viz = handle.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",10);
     
     srv_raycast = handle.advertiseService("/mapping/raycast", &Mapping::performRaycast, this);
+    srv_fit = handle.advertiseService("/mapping/fitblob", &Mapping::serviceFitRequest, this);
 
     occupancy_grid.header.frame_id = "world";
     nav_msgs::MapMetaData metaData;
@@ -374,6 +375,40 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
 
     pub_viz.publish(markers.get());
     markers.clear();
+
+    return true;
+
+}
+
+bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, navigation_msgs::FitBlobResponse &response)
+{
+    double radius_map = request.radius;
+    int radius = round(radius_map*100.0);
+    Point<int> center = robotPointToCell(Point<double>(request.x, request.y));
+    Point<int> top_left(center.x - radius, center.y - radius);
+    int width = radius*2;
+
+    int num_cells = 0;
+    int num_occluded = 0;
+
+    //count occluded cells
+    for(int y = top_left.y; y < top_left.y+width; ++y) {
+        for(int x = top_left.x; x < top_left.x+width; ++x) {
+
+            int dx = center.x - x; // horizontal offset
+            int dy = center.y - y; // vertical offset
+            if ( (dx*dx + dy*dy) <= (radius*radius) )
+            {
+                if (isObstacle(x,y))
+                    num_occluded++;
+
+                num_cells++;
+            }
+
+        }
+    }
+
+    response.fits = ((double)num_occluded/(double)num_cells) < request.max_occlusion_ratio;
 
     return true;
 
