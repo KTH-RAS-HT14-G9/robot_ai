@@ -17,6 +17,7 @@ from enum import IntEnum
 RobotDirections = IntEnum('RobotDirections','FORWARD RIGHT BACKWARDS LEFT')
 MapDirections = IntEnum('MapDirections','NORTH EAST SOUTH WEST')
 
+ROBOT_DIAMETER = 0.25
 RECOGNITION_TIME = 2.0
 WAITING_TIME = 0.005
 DIRECTION_BLOCKED = -2
@@ -36,6 +37,7 @@ follow_wall_pub = None
 go_forward_pub = None
 place_node_service = None
 next_noi_service = None
+fit_blob_service = None
 
 turn_done = False
 object_recognized = False
@@ -52,8 +54,7 @@ class Explore(smach.State):
         smach.State.__init__(self, outcomes=['explore','obstacle_detected', 'object_detected', 'follow_graph', 'finished'])
 
     def execute(self, userdata):
-        if rospy.is_shutdown():
-            return 'finished';
+        check_for_interrupt()
         node_seen = node_detected
         reset_node_detected()
         follow_wall(True)
@@ -147,8 +148,17 @@ class FollowGraph(smach.State):
             if obstacle_ahead():
                 rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
                 return 'explore'
+            check_for_interrupt()
             rospy.sleep(WAITING_TIME)
         return 'follow_graph'
+
+def check_for_interrupt():
+    if rospy.is_shutdown():
+        return sys.exit(0);
+
+def obstacle_behind():
+    free = fit_blob_service.call(-ROBOT_DIAMETER+0.03, 0.0, 0.08, 0.05)
+    return not free
 
 def get_direction_to(node):
     if node.id_north == current_node.id_this:
@@ -224,8 +234,10 @@ def turn(angle):
     reset_motor_controller()
     turn_done = False
     turn_pub.publish(angle)
-    wait_for_turn_done()
+    wait_for_flag(turn_done)
+    rospy.loginfo("turn done")
     update_direction(angle)
+    rospy.sleep(0.5) # for aligning
 
 def update_direction(turn_angle):
     global current_direction
@@ -240,10 +252,10 @@ def update_direction(turn_angle):
 
     current_direction = (current_direction + increment) % 4
 
-def wait_for_turn_done():
-    while not turn_done:
+def wait_for_flag(flag):
+    while not flag:
+        check_for_interrupt()
         rospy.sleep(WAITING_TIME)
-    rospy.loginfo("turn done")
 
 def follow_wall(should_follow):
     global following_wall
@@ -262,12 +274,8 @@ def go_forward(should_go):
         go_forward_pub.publish(should_go)
         rospy.loginfo("Going forward: %s", str(should_go))
         if not should_go:
-            wait_for_stop_done()
-
-def wait_for_stop_done():
-    while not stop_done:
-        rospy.sleep(WAITING_TIME)
-    rospy.loginfo("Stopping Done")
+            wait_for_flag(stop_done)
+            rospy.loginfo("Stopping Done")
 
 def recognize_object():
     global object_detected, object_recognized
@@ -318,8 +326,8 @@ def robot_dir_blocked(robot_dir):
         return not can_turn_right()
     if robot_dir == RobotDirections.FORWARD:
         return obstacle_ahead()
-    # TODO handle backwards with grid map
-    return True
+    if robot_dir == RobotDirections.BACKWARDS:
+        return obstacle_behind()
 
 def robot_to_map_dir(robot_dir):
     if current_direction == MapDirections.NORTH:
@@ -408,8 +416,10 @@ def main(argv):
 
     rospy.wait_for_service('/navigation/graph/place_node')
     rospy.wait_for_service('/navigation/graph/next_node_of_interest')
+    rospy.wait_for_service('/mapping/fitblob')
     place_node_service = rospy.ServiceProxy('/navigation/graph/place_node', navigation_msgs.srv.PlaceNode)
     next_noi_service = rospy.ServiceProxy('/navigation/graph/next_node_of_interest', navigation_msgs.srv.NextNodeOfInterest)
+    fit_blob_service = rospy.ServiceProxy('/mapping/fitblob', navigation_msgs.srv.FitBlob)
 
     rospy.sleep(3.0)
 
