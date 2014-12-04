@@ -45,6 +45,7 @@ Mapping::Mapping() :
     pub_viz = handle.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",10);
     
     srv_raycast = handle.advertiseService("/mapping/raycast", &Mapping::performRaycast, this);
+    srv_fit = handle.advertiseService("/mapping/fitblob", &Mapping::serviceFitRequest, this);
 
     occupancy_grid.header.frame_id = "world";
     nav_msgs::MapMetaData metaData;
@@ -316,8 +317,6 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
     Point<double> p1 = robotToMapTransform(robot_p1);
     Point<double> p2 = robotToMapTransform(robot_p2);
 
-    markers.add_line(p1.x,p1.y,p2.x,p2.y,0.1,0.01,255,0,0);
-
     std::vector<Point<int> > obstacle_points;
 
     //line draw algorithm again to find obstacles
@@ -361,15 +360,55 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
         response.hit = true;
 
         Eigen::Vector2d hit_p(obstacle_points.begin()->x, obstacle_points.begin()->y);
-        //TODO: Transform back to robot coordinates
-        response.hit_x = hit_p(0);
-        response.hit_y = hit_p(1);
 
         response.hit_dist = (hit_p - Eigen::Vector2d(p1.x, p1.y)).norm();
+
+        dir.normalize();
+        response.hit_x = origin(0) + dir(0)*response.hit_dist;
+        response.hit_y = origin(1) + dir(1)*response.hit_dist;
     }
+
+    if (response.hit)
+        markers.add_line(p1.x-MAP_X_OFFSET,p1.y-MAP_Y_OFFSET,p2.x-MAP_X_OFFSET,p2.y-MAP_Y_OFFSET,0.1,0.01,255,0,0);
+    else
+        markers.add_line(p1.x-MAP_X_OFFSET,p1.y-MAP_Y_OFFSET,p2.x-MAP_X_OFFSET,p2.y-MAP_Y_OFFSET,0.1,0.01,0,255,0);
 
     pub_viz.publish(markers.get());
     markers.clear();
+
+    return true;
+
+}
+
+bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, navigation_msgs::FitBlobResponse &response)
+{
+    double radius_map = request.radius;
+    int radius = round(radius_map*100.0);
+    Point<int> center = robotPointToCell(Point<double>(request.x, request.y));
+    Point<int> top_left(center.x - radius, center.y - radius);
+    int width = radius*2;
+
+    int num_cells = 0;
+    int num_occluded = 0;
+
+    //count occluded cells
+    for(int y = top_left.y; y < top_left.y+width; ++y) {
+        for(int x = top_left.x; x < top_left.x+width; ++x) {
+
+            int dx = center.x - x; // horizontal offset
+            int dy = center.y - y; // vertical offset
+            if ( (dx*dx + dy*dy) <= (radius*radius) )
+            {
+                if (isObstacle(x,y))
+                    num_occluded++;
+
+                num_cells++;
+            }
+
+        }
+    }
+
+    response.fits = ((double)num_occluded/(double)num_cells) < request.max_occlusion_ratio;
 
     return true;
 
