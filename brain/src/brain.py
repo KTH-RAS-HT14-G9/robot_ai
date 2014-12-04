@@ -6,87 +6,70 @@ import smach_ros
 import sys
 import time
 import math
-from std_msgs.msg import Float64
-from std_msgs.msg import String
-from std_msgs.msg import Bool
-from ir_converter.msg import Distance
-
-from navigation_msgs.msg import Node
+from std_msgs.msg import *
+from navigation_msgs.msg import *
 from navigation_msgs.srv import *
+from ir_converter.msg import Distance
 from vision_msgs.msg import Object
 from nav_msgs.msg import Odometry
+from enum import IntEnum
 
-######################## VARIABLES #########################
-odometry = None
+RobotDirections = IntEnum('RobotDirections','FORWARD RIGHT BACKWARDS LEFT')
+MapDirections = IntEnum('MapDirections','NORTH EAST SOUTH WEST')
+
+RECOGNITION_TIME = 2.0
+WAITING_TIME = 0.005
+DIRECTION_BLOCKED = -2
+SIDE_BLOCKED_THRESHOLD = 0.35
+FRONT_BLOCKED_THRESHOLD = 0.25
+
+detected_object = Object()
+odometry = Odometry()
+distance = Distance()
 current_node = Node()
-current_node.id_this = -1
-recognition_time = 2.0
-waiting_time = 0.001
 
-rospy.wait_for_service('/navigation/graph/place_node')
-rospy.wait_for_service('/navigation/graph/next_node_of_interest')
-place_node = rospy.ServiceProxy('/navigation/graph/place_node', navigation_msgs.srv.PlaceNode)
-next_node_of_interest = rospy.ServiceProxy('/navigation/graph/next_node_of_interest', navigation_msgs.srv.NextNodeOfInterest)
-
-NORTH=0
-EAST=1
-SOUTH=2
-WEST=3
-current_direction = EAST
-object_x = -1
-object_y = -1
-node_detected = False
+current_direction = MapDirections.EAST
 reset_mc_pub = None
 recognize_object_pub = None
 turn_pub = None
 follow_wall_pub = None
 go_forward_pub = None
+place_node_service = None
+next_noi_service = None
 
-turn_threshold = 0.35
-obstacle_threshold = 0.25
-fl_ir = 0
-fr_ir = 0
-bl_ir = 0
-br_ir = 0
-l_front_ir = 0
-r_front_ir = 0
 turn_done = False
 object_recognized = False
 object_detected = False
-object_location = None
 following_wall = False
 going_forward = False
 stop_done = False
-object_type=-1
-object_angle=0
-time_start=0
-angle_record=0
-
-######################## STATES #########################
+fetch_objects = False
+walls_have_changed = True
+node_detected = False
 
 class Explore(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['explore','obstacle_detected', 'object_detected', 'intersection_detected', 'follow_graph'])
+        smach.State.__init__(self, outcomes=['explore','obstacle_detected', 'object_detected', 'follow_graph', 'finished'])
 
     def execute(self, userdata):
-        fam_node_seen = node_detected
-        ResetFamiliarNodeDetected()
-        FollowWall(True)
-        GoForward(True)
-        if object_detected and not RecognizedBefore():
+        if rospy.is_shutdown():
+            return 'finished';
+        node_seen = node_detected
+        reset_node_detected()
+        follow_wall(True)
+        go_forward(True)
+        if object_detected and not recognized_before():
             rospy.loginfo("EXPLORE ==> OBJECT_DETECTED")
             return 'object_detected'
-        elif fam_node_seen:
-            rospy.loginfo("EXPLORE ==> node_detected")
+        elif node_seen:
+            rospy.loginfo("EXPLORE ==> FOLLOW_GRAPH")
             return 'follow_graph'
-        elif ObstacleAhead():
+        elif obstacle_ahead():
             rospy.loginfo("EXPLORE ==> OBSTACLE_DETECTED")
             return 'obstacle_detected'        
-        elif IsAtIntersection() and CurrentNodeNotHere():
-            #rospy.loginfo("EXPLORE ==> INTERSECTION_DETECTED")
-            #return 'intersection_detected'
+        elif is_at_intersection():
             rospy.loginfo("Is at intersection, placing node")
-            PlaceNode(False)
+            place_node(False)
         return 'explore'    
 
 class ObstacleDetected(smach.State):
@@ -95,19 +78,19 @@ class ObstacleDetected(smach.State):
 
     def execute(self, userdata):
         #if not stop_done:
-            GoForward(False)
-            FollowWall(False)
+            go_forward(False)
+            follow_wall(False)
           #  return 'obstacle_detected'
         #else:
-            PlaceNode(False)
-            if CanTurnLeft():
-                TurnLeft()
-            elif CanTurnRight():
-                TurnRight()
+            place_node(False)
+            if can_turn_left():
+                turn_left()
+            elif can_turn_right():
+                turn_right()
             else:
-                TurnBack()
+                turn_back()
             rospy.loginfo("OBSTACLE_DETECTED ==> EXPLORE")
-            ResetFamiliarNodeDetected()
+            reset_node_detected()
             return 'explore'
 
 class ObjectDetected(smach.State):
@@ -116,39 +99,27 @@ class ObjectDetected(smach.State):
 
     def execute(self, userdata):
 
-        GoForward(False)
-        FollowWall(False)
+        go_forward(False)
+        follow_wall(False)
+
+        object_angle=atan2(detected_object.y,detected_object.x)
+        object_angle=180*(object_angle/pi)
+
         has_turned = False
         if (fabs(object_angle)>10):
-           angle_record=object_angle
-           Turn(object_angle)
+           turn(object_angle)
            has_turned = True
         
-        object_recognized = RecognizeObject()
+        object_recognized = recognize_object()
         
         if has_turned:
-            Turn(-angle_record)
+            turn(-object_angle)
         
-        PlaceNode(object_recognized)
+        if object_recognized:
+            place_node(True)
 
         rospy.loginfo("OBJECT_DETECTED ==> EXPLORE")
-        ResetFamiliarNodeDetected()
-        return 'explore'
-
-class IntersectionDetected(smach.State):
-    def __init__(self):
-        smach.State.__init__(self, outcomes=['explore'])
-
-    def execute(self, userdata):
-        PlaceNode(False)   
-        
-        while IsAtIntersection():
-            if ObstacleAhead():
-                break
-            rospy.sleep(waiting_time)
-
-        ResetFamiliarNodeDetected()
-        rospy.loginfo("INTERSECTION_DETECTED ==> EXPLORE")
+        reset_node_detected()
         return 'explore'
 
 class FollowGraph(smach.State):
@@ -157,264 +128,269 @@ class FollowGraph(smach.State):
 
     def execute(self, userdata):
         
-        next_node = GetNextNodeOfInterest()
+        next_node = get_next_noi()
         if(next_node.id_this == current_node.id_this):
+            rospy.loginfo("Destination reached")
             rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
             return 'explore'
-        angle = GetAngleTo(GetDirectionTo(next_node))
+        angle = get_angle_to(get_direction_to(next_node))
         if angle != 0:
-            GoForward(False)
-            FollowWall(False)
-            Turn(angle)
+            go_forward(False)
+            follow_wall(False)
+            turn(angle)
 
-        FollowWall(True)
-        GoForward(True)
+        follow_wall(True)
+        go_forward(True)
 
         node_detected = False
         while not node_detected:
-            if ObstacleAhead():
+            if obstacle_ahead():
                 rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
                 return 'explore'
-            rospy.sleep(waiting_time)
+            rospy.sleep(WAITING_TIME)
         return 'follow_graph'
 
-######################## FUNCTIONS #########################
-
-def CurrentNodeNotHere():
-    x = odometry.pose.pose.position.x
-    y = odometry.pose.pose.position.y
-    dist = math.sqrt(math.pow(x-current_node.x, 2) + math.pow(y-current_node.y, 2))
-    return dist > 0.1
-
-def GetDirectionTo(node):
+def get_direction_to(node):
     if node.id_north == current_node.id_this:
-        return SOUTH
-    if node.id_west == current_node.id_this:
-        return EAST
+        return MapDirections.SOUTH
+    if node.id_east == current_node.id_this:
+        return MapDirections.WEST
     if node.id_south == current_node.id_this:
-        return NORTH
-    return WEST
+        return MapDirections.NORTH
+    if node.id_west == current_node.id_this:
+        return MapDirections.EAST
 
-def GetAngleTo(direction):
-    angle = 90.0 * ((current_direction - direction + 4) % 4)
+def get_angle_to(map_dir):
+    angle = 90.0 * ((current_direction - map_dir + 4) % 4)
     if angle == 270.0:
         return -90.0
     return angle
 
-
-def RecognizedBefore():
+def recognized_before():
+    global object_detected
     object_detected = False
     return current_node.object_here
 
-def GetNextNodeOfInterest():
-    return next_node_of_interest.call(NextNodeOfInterestRequest(current_node.id_this, 0)).target_node
+def get_next_noi():
+    mode = 0
+    if fetch_objects:
+        mode = 1
+    return next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, mode)).target_node
 
-
-def PlaceNode(object_here):
-    global current_node
-    #TODO: Fill interface with object information
-    response = place_node.call(PlaceNodeRequest(current_node.id_this, current_direction, NorthBlocked(), EastBlocked(), SouthBlocked(), WestBlocked(), object_here, object_type, current_direction, object_x, object_y))
+def place_node(object_here):
+    global current_node, walls_have_changed
+    walls_have_changed = False
+    response = place_node_service.call(PlaceNodeRequest(current_node.id_this, current_direction, north_blocked(), east_blocked(), south_blocked(), west_blocked(), object_here, detected_object.type, current_direction, detected_object.x, detected_object.y))
     current_node = response.generated_node
 
-def NorthBlocked():
-    if current_direction == NORTH:
-        return ObstacleAhead()
-    if current_direction == WEST:
-        return not CanTurnRight()
-    if current_direction == EAST: 
-        return not CanTurnLeft()
-    else: return False # TODO handle special case where the robot has just turned, then this is not true. Solve by looking at map
+def north_blocked():
+    return map_dir_blocked(MapDirections.NORTH)
 
-def WestBlocked():
-    if current_direction == NORTH:
-        return not CanTurnLeft()
-    if current_direction == WEST:
-        return ObstacleAhead()
-    if current_direction == SOUTH: 
-        return not CanTurnRight()
-    else: return False
+def west_blocked():
+    return map_dir_blocked(MapDirections.WEST)
 
-def SouthBlocked():
-    if current_direction == WEST:
-        return not CanTurnLeft()
-    if current_direction == EAST:
-        return not CanTurnRight()
-    if current_direction == SOUTH: 
-        return  ObstacleAhead()
-    else: return False
+def south_blocked():
+    return map_dir_blocked(MapDirections.SOUTH)
 
-def EastBlocked():
-    if current_direction == NORTH:
-        return not CanTurnRight()
-    if current_direction == EAST:
-        return ObstacleAhead()
-    if current_direction == SOUTH: 
-        return  CanTurnLeft()
-    else: return False
+def east_blocked():
+    return map_dir_blocked(MapDirections.EAST)
 
-def ResetFamiliarNodeDetected():
+def reset_node_detected():
     node_detected = False
 
-def CanTurnLeft():
-    return True if fl_ir > turn_threshold and bl_ir > turn_threshold else False
+def can_turn_left():
+    return True if distance.fl_side > SIDE_BLOCKED_THRESHOLD and distance.bl_side > SIDE_BLOCKED_THRESHOLD else False
 
-def CanTurnRight():
-    return True if fr_ir > turn_threshold and br_ir > turn_threshold else False
+def can_turn_right():
+    return True if distance.fr_side > SIDE_BLOCKED_THRESHOLD and distance.br_side > SIDE_BLOCKED_THRESHOLD else False
 
-def ObstacleAhead():
-    return True if l_front_ir < obstacle_threshold or r_front_ir < obstacle_threshold else False
+def obstacle_ahead():
+    return True if distance.l_front < FRONT_BLOCKED_THRESHOLD or distance.r_front < FRONT_BLOCKED_THRESHOLD else False
 
-def TurnLeft():
-    rospy.loginfo("Turning left")
-    Turn(90.0)
+def turn_left():
+    rospy.loginfo("turning left")
+    turn(90.0)
     
-def TurnRight():
-    rospy.loginfo("Turning right")
-    Turn(-90.0)
+def turn_right():
+    rospy.loginfo("turning right")
+    turn(-90.0)
 
-def TurnBack():
-    rospy.loginfo("Turning back")
-    Turn(180.0)
+def turn_back():
+    rospy.loginfo("turning back")
+    turn(180.0)
 
-def Turn(angle):
-    global current_direction, turn_done
-    current_direction = (current_direction + GetDirIncrement(angle)) % 4
-    ResetMotorController()
+def turn(angle):
+    global turn_done
+    reset_motor_controller()
     turn_done = False
     turn_pub.publish(angle)
-    waitForTurnDone()
+    wait_for_turn_done()
+    update_direction(angle)
 
-def GetDirIncrement(angle):
-    if angle == 90.0:
-        return 3
-    if angle == -90.0:
-        return 1
-    if angle == 180.0:
-        return 2
-    return 0
+def update_direction(turn_angle):
+    global current_direction
 
-def waitForTurnDone():
+    increment = 0
+    if turn_angle == 90.0:
+        increment = 3
+    if turn_angle == -90.0:
+        increment = 1
+    if turn_angle == 180.0:
+        increment = 2
+
+    current_direction = (current_direction + increment) % 4
+
+def wait_for_turn_done():
     while not turn_done:
-        rospy.sleep(waiting_time)
-    rospy.loginfo("Turn done")
+        rospy.sleep(WAITING_TIME)
+    rospy.loginfo("turn done")
 
-def FollowWall(should_follow):
+def follow_wall(should_follow):
     global following_wall
     if (should_follow and not following_wall) or (not should_follow and following_wall):
         following_wall = not following_wall
         follow_wall_pub.publish(should_follow)
         rospy.loginfo("Following Wall: %s", str(should_follow))
 
-def GoForward(should_go):
+def go_forward(should_go):
     global going_forward, stop_done
-#    if (should_go and not going_forward) or (not should_go and going_forward):
+
     if should_go != going_forward:
-        ResetMotorController()
+        reset_motor_controller()
         going_forward = should_go
         stop_done = False
         go_forward_pub.publish(should_go)
         rospy.loginfo("Going forward: %s", str(should_go))
         if not should_go:
-            WaitForStopDone()
+            wait_for_stop_done()
 
-def WaitForStopDone():
+def wait_for_stop_done():
     while not stop_done:
-        rospy.sleep(waiting_time)
-    else:    
-        rospy.loginfo("Stopping Done")
+        rospy.sleep(WAITING_TIME)
+    rospy.loginfo("Stopping Done")
 
-def RecognizeObject():
-    global object_recognized
+def recognize_object():
+    global object_detected, object_recognized
 
     object_recognized = False
     rospy.loginfo("Start recognizing object")
     recognize_object_pub.publish(True)
-    WaitForRecognitionDone(time.clock())
-    object_detected = False
 
-def WaitForRecogniztionDone(start_time):
-    while time.clock() - start_time < recognition_time:
-        rospy.sleep(waiting_time)
+    rospy.sleep(RECOGNITION_TIME)
     if object_recognized:
         rospy.loginfo("Object recognized")
     else:
         rospy.loginfo("Recognition Failed")
+
+    object_recognized = False
+    object_detected = False
     
-def ResetMotorController():
+def reset_motor_controller():
     reset_mc_pub.publish(True)
     rospy.loginfo("Resetting MC pid")
 
-def IsAtIntersection():
-    return True if not ObstacleAhead() and (CanTurnRight() or CanTurnLeft()) else False
+def update_walls_changed():
+    global walls_have_changed
+    if not ((current_node.id_north==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.NORTH) and 
+            (current_node.id_east==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.EAST) and
+            (current_node.id_south==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.SOUTH) and 
+            (current_node.id_west==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.WEST)):
+        walls_have_changed = True
 
-################### CALLBACKS #############################
+def walls_changed():
+    return walls_have_changed
 
-def TurnDoneCallback(data):
+def is_at_intersection():
+    if walls_changed() and not obstacle_ahead() and (can_turn_right() or can_turn_left()):
+            rospy.loginfo("Placing node at intersection.")
+            rospy.loginfo("Prev node: N: %s, E: %s, S: %s, W: %s", str(current_node.id_north == DIRECTION_BLOCKED), str(current_node.id_east == DIRECTION_BLOCKED), str(current_node.id_south == DIRECTION_BLOCKED), str(current_node.id_west == DIRECTION_BLOCKED))
+            rospy.loginfo("Currently: N: %s, E: %s, S: %s, W: %s", str(robot_dir_blocked(map_to_robot_dir(MapDirections.NORTH))), str(robot_dir_blocked(map_to_robot_dir(MapDirections.EAST))), str(robot_dir_blocked(map_to_robot_dir(MapDirections.SOUTH))), str(robot_dir_blocked(map_to_robot_dir(MapDirections.WEST))))
+            return True
+    return False
+
+def map_dir_blocked(map_dir):
+    return robot_dir_blocked(map_to_robot_dir(map_dir))
+
+def robot_dir_blocked(robot_dir):
+    if robot_dir == RobotDirections.LEFT:
+        return not can_turn_left()
+    if robot_dir == RobotDirections.RIGHT:
+        return not can_turn_right()
+    if robot_dir == RobotDirections.FORWARD:
+        return obstacle_ahead()
+    # TODO handle backwards with grid map
+    return True
+
+def robot_to_map_dir(robot_dir):
+    if current_direction == MapDirections.NORTH:
+        return robot_dir
+    if current_direction == MapDirections.WEST:
+        return (robot_dir + 3) % 4
+    if current_direction == MapDirections.SOUTH:
+        return (robot_dir + 2) % 4
+    return (robot_dir + 1) % 4 
+
+def map_to_robot_dir(map_dir):
+    if current_direction == MapDirections.NORTH:
+        return map_dir
+    if current_direction == MapDirections.WEST:
+        return (map_dir + 1) % 4
+    if current_direction == MapDirections.SOUTH:
+        return (map_dir + 2) % 4
+    return (map_dir + 3) % 4
+
+def turn_done_callback(data):
     global turn_done
     turn_done = True
-    rospy.loginfo("Turn done callback: %s", str(data))
+    rospy.loginfo("turn done callback: %s", str(data))
 
-def StoppingDoneCallback(data):
+def stopping_done_callback(data):
     global stop_done
     stop_done = True
     rospy.loginfo("Stopping done callback: %s", str(data))
 
-def ObjectRecognizedCallback(data):
+def object_recognized_callback(data):
     global object_recognized
     object_recognized = True
     rospy.loginfo("Object Recognized: %s", str(data))
 
-def ObjectDetectedCallback(data):
-    global object_detected, object_location
+def ir_callback(data):
+    global distance
+    distance = data
+    update_walls_changed()
+
+def object_detected_callback(data):
+    global detected_object, object_detected
+    detected_object = data
     object_detected = True
-    object_location = data
-    rospy.loginfo("Object Detected: %s", str(data))
+    rospy.loginfo("Object detected")
 
-def IRCallback(data):
-    global fl_ir, fr_ir, bl_ir, br_ir, l_front_ir, r_front_ir
-    fl_ir = data.fl_side;
-    fr_ir = data.fr_side;
-    bl_ir = data.bl_side;
-    br_ir = data.br_side;
-    l_front_ir = data.l_front;
-    r_front_ir = data.r_front;
-
-def ObjectOrientationCallback(data):
-    global object_angle,object_type, object_x, object_y
-    object_type=data.type
-    object_x=data.x
-    object_y=data.y
-    object_angle=atan2(object_y,object_x)
-
-    if object_angle>(pi/2):
-       object_angle=object_angle-pi
-       object_angle=180*(object_angle/pi)
-
-def OnNodeCallback(node):
+def on_node_callback(node):
     global current_node
     
     if(current_node.id_this == node.id_this):
         current_node = node
         node_detected = True
 
-def OdometryCallback(data):
+def odometry_callback(data):
     global odometry
     odometry = data
 
-def main():
-    global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub, reset_mc_pub
+def main(argv):
+    global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub, reset_mc_pub, fetch_objects, place_node_service, next_noi_service, current_node
     rospy.init_node('brain')
 
+    if len(argv) > 1 and argv[1] == 'fetch':
+        fetch_objects = True
     
     sm = smach.StateMachine(outcomes=['finished'])
-    rospy.Subscriber("/perception/ir/distance", Distance, IRCallback)
-    rospy.Subscriber("/controller/turn/done", Bool, TurnDoneCallback)
-    rospy.Subscriber("/vision/recognition/done", String, ObjectRecognizedCallback) 
-    rospy.Subscriber("/vision/detector/obstacle/distance", Float64, ObjectDetectedCallback) 
-    rospy.Subscriber("/vision/obstacle/object", Object, ObjectOrientationCallback)
-    rospy.Subscriber("/controller/forward/stopped", Bool, StoppingDoneCallback)
-    rospy.Subscriber("/navigation/graph/on_node", Node, OnNodeCallback)
-    rospy.Subscriber("/pose/odometry/", Odometry, OdometryCallback)
+    rospy.Subscriber("/perception/ir/distance", Distance, ir_callback)
+    rospy.Subscriber("/controller/turn/done", Bool, turn_done_callback)
+    rospy.Subscriber("/vision/recognition/done", String, object_recognized_callback) 
+    rospy.Subscriber("/vision/obstacle/object", Object, object_detected)
+    rospy.Subscriber("/controller/forward/stopped", Bool, stopping_done_callback)
+    rospy.Subscriber("/navigation/graph/on_node", Node, on_node_callback)
+    rospy.Subscriber("/pose/odometry/", Odometry, odometry_callback)
 
     turn_pub = rospy.Publisher("/controller/turn/angle", Float64, queue_size=10)
     follow_wall_pub = rospy.Publisher("/controller/wall_follow/active", Bool, queue_size=10)
@@ -423,21 +399,24 @@ def main():
     reset_mc_pub = rospy.Publisher("controller/motor/reset", Bool, queue_size=1)
 
     with sm:
-        smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED',
-            'intersection_detected' : 'INTERSECTION_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
-            'object_detected' : 'OBJECT_DETECTED'})
+        smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
+            'object_detected' : 'OBJECT_DETECTED', 'finished':'finished'})
         smach.StateMachine.add('OBSTACLE_DETECTED', ObstacleDetected(), transitions={'explore': 'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED'})
         smach.StateMachine.add('OBJECT_DETECTED', ObjectDetected(), transitions={'explore': 'EXPLORE'})
-        smach.StateMachine.add('INTERSECTION_DETECTED', IntersectionDetected(), transitions={'explore': 'EXPLORE'})
         smach.StateMachine.add('FOLLOW_GRAPH', FollowGraph(), transitions={'explore' : 'EXPLORE',
             'follow_graph' : 'FOLLOW_GRAPH'})
 
-    
+    rospy.wait_for_service('/navigation/graph/place_node')
+    rospy.wait_for_service('/navigation/graph/next_node_of_interest')
+    place_node_service = rospy.ServiceProxy('/navigation/graph/place_node', navigation_msgs.srv.PlaceNode)
+    next_noi_service = rospy.ServiceProxy('/navigation/graph/next_node_of_interest', navigation_msgs.srv.NextNodeOfInterest)
+
     rospy.sleep(3.0)
 
-    PlaceNode(False)
+    response = place_node_service.call(PlaceNodeRequest(-1, MapDirections.EAST, north_blocked(), east_blocked(), south_blocked(), True, False, -1, -1, -1, -1))
+    current_node = response.generated_node
 
     outcome = sm.execute() 
 
 #if __name__ == '__main__':
-main()
+main(sys.argv)
