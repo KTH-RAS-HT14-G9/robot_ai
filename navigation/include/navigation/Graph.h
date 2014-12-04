@@ -33,6 +33,7 @@ public:
 
     void path_to_next_unknown(int id_from, std::vector<int>& path);
     void path_to_next_object(int id_from, std::vector<int>& path);
+    void path_to_node(int id_from, int id_to, std::vector<int>& path);
 
     bool has_unkown_directions(int id);
 
@@ -281,6 +282,15 @@ void Graph::path_to_next_object(int id_from, std::vector<int> &path)
     }
 
     path_to_poi(id_from, is_object, path);
+}
+
+void Graph::path_to_node(int id_from, int id_to, std::vector<int> &path)
+{
+    std::vector<bool> is_target_node;
+    is_target_node.resize(_nodes.size());
+    is_target_node[id_to] = true;
+
+    path_to_poi(id_from, is_target_node, path);
 }
 
 

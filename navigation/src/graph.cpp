@@ -105,13 +105,18 @@ void init_path_to_noi(int id_from, int trait) {
     _path.trait = trait;
     _path.path.clear();
 
-    if (trait == NODE_TRAIT_UNKNOWN) {
+    if (trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_UNKNOWN_DIR) {
         ROS_INFO("Finding shortest path to next unkown location...");
         _graph.path_to_next_unknown(id_from, _path.path);
     }
-    else if (trait == NODE_TRAIT_HAS_OBJECT) {
+    else if (trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_OBJECT) {
         ROS_INFO("Finding shortest path to next object...");
         _graph.path_to_next_object(id_from, _path.path);
+    }
+    else if (trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_START)
+    {
+        ROS_INFO("Finding shortest path to start node...");
+        _graph.path_to_node(id_from, 0, _path.path);
     }
     else
         ROS_ERROR("Requested trait %d is not implemented yet.", trait);
