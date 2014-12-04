@@ -11,8 +11,8 @@
 #include <navigation_msgs/Raycast.h>
 #include <vision_msgs/Planes.h>
 
-#define RAD2DEG(x) ((x)*M_PI/180.0)
-#define DEG2RAD(x) ((x)*180.0/M_PI)
+#define DEG2RAD(x) ((x)*M_PI/180.0)
+#define RAD2DEG(x) ((x)*180.0/M_PI)
 
 //------------------------------------------------------------------------------
 // Members
@@ -282,8 +282,6 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
             double dx = robot::ir::offset_front_left_forward + robot::ir::offset_rear_left_forward;
             double dy = get_dy(_ir_dist);
 
-            ROS_ERROR("dy = %lf",dy);
-
             if(isnan(dy))
                 return;
 
@@ -316,7 +314,7 @@ void callback_turn_done(const std_msgs::BoolConstPtr& done)
 
     double angle = atan(dy/dx);
 
-    if (std::abs(angle) < M_PI_4) {
+    if (RAD2DEG(std::abs(angle)) < 10.0) {
         ROS_INFO("Attempt to correct theta by using ir sensors");
         _correct_theta = true;
     }
@@ -328,14 +326,19 @@ void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
     while (_turn_accum >= 90.0) {
         _turn_accum -= 90.0;
         _heading++;
+        if (_heading >= 3) _heading -= 4;
     }
 
     while (_turn_accum <= -90.0) {
         _turn_accum += 90.0;
         _heading--;
+        if (_heading <= -2) _heading += 4;
     }
 
-    _heading = ( (_heading+2)%4 ) - 2;
+//    _heading = ( (_heading-1)%2) + 1;
+//    _heading = ( (_heading+2)%4 ) - 2;
+
+//    ROS_ERROR("Turned %.1lf, mod: %.2lf, heading: %d",angle->data,_turn_accum,_heading);
 }
 
 void callback_planes(const vision_msgs::PlanesConstPtr& planes)
@@ -422,7 +425,7 @@ int main(int argc, char **argv)
     _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
     _pub_viz = n.advertise<visualization_msgs::Marker>( "visualization_marker", 0 );
 
-    _srv_raycast = n.serviceClient<navigation_msgs::Raycast>("/mapping/raycast",true);
+    _srv_raycast = n.serviceClient<navigation_msgs::Raycast>("/mapping/raycast");
 
     ros::spin();
 
