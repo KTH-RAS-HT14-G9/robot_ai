@@ -23,13 +23,14 @@ protected:
             ,id_east(-1)
             ,id_south(-1)
             ,id_west(-1)
-            ,id_circle(-1)
+            ,id_circle_on(-1)
+            ,id_circle_merge(-1)
             ,id_label(-1)
         {}
 
         int id_node;
         int id_north, id_east, id_south, id_west;
-        int id_circle, id_label;
+        int id_circle_on, id_circle_merge, id_label;
     };
 
     void draw_node(int id, bool highlight);
@@ -75,7 +76,8 @@ void GraphViz::draw()
 
     for(int i = 0; i < N; ++i)
     {
-        if (_node_clean[i] == false) {
+        //if (_node_clean[i] == false)
+        {
             draw_node(i,_highlight.at(i));
             _node_clean.at(i) = true;
             _highlight.at(i) = false;
@@ -101,7 +103,8 @@ void GraphViz::draw_node(int id, bool highlight)
     static common::Color color_edge(200,200,220);
     static common::Color color_unknown(255,148,148);
 
-    static common::Color color_circle(148,180,255);
+    static common::Color color_circle_on(148,180,255);
+    static common::Color color_circle_merge(242,22,161);
     static common::Color color_object(0,255,0);
 
     static const float line_z = 0.025f;
@@ -121,14 +124,16 @@ void GraphViz::draw_node(int id, bool highlight)
     //draw node
     if (node.object_here) {
         std::string label = static_cast<std::ostringstream*>( &(std::ostringstream() << node.object_type) )->str();
-        marker_id.id_circle = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_object.r, color_object.g, color_object.b, 50, marker_id.id_circle);
+        marker_id.id_circle_on = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_object.r, color_object.g, color_object.b, 50, marker_id.id_circle_on);
+        marker_id.id_circle_merge = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_merge_thresh()*2.0, color_circle_merge.r, color_circle_merge.g, color_circle_merge.b, 50, marker_id.id_circle_on);
         marker_id.id_label = _marker.add_text(node.x,node.y, scale*2.0f, label, 0,255,0, marker_id.id_label);
     }
     else {
         std::string label = static_cast<std::ostringstream*>( &(std::ostringstream() << node.id_this) )->str();
         marker_id.id_node = _marker.add_cube(node.x,node.y,scale, color_node.r, color_node.g, color_node.b, marker_id.id_node);
-        marker_id.id_circle = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_circle.r, color_circle.g, color_circle.b, 50, marker_id.id_circle);
-        marker_id.id_label = _marker.add_text(node.x,node.y, scale*2.0f, label, 255,255,255, marker_id.id_label);
+        marker_id.id_circle_on = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_circle_on.r, color_circle_on.g, color_circle_on.b, 50, marker_id.id_circle_on);
+        marker_id.id_circle_merge = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_circle_merge.r, color_circle_merge.g, color_circle_merge.b, 50, marker_id.id_circle_on);
+        marker_id.id_label = _marker.add_text(node.x,node.y, scale*4.0f, label, 255,255,255, marker_id.id_label);
     }
 
     //draw edges
