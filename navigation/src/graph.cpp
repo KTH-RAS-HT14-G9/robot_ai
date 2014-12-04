@@ -125,7 +125,9 @@ void init_path_to_noi(int id_from, int trait) {
 bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
                       navigation_msgs::NextNodeOfInterestResponse& response)
 {
-    if ( request.trait == NODE_TRAIT_UNKNOWN || request.trait == NODE_TRAIT_HAS_OBJECT )
+    if ( request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_UNKNOWN_DIR ||
+         request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_OBJECT ||
+         request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_START )
     {
         //if we haven't finished an existing path: advance a step
         if (_path.next < _path.path.size())
@@ -138,15 +140,12 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
                 ROS_ERROR("Last path was not completed. Will service request anyway.");
                 init_path_to_noi(request.id_from, request.trait);
             }
-            else {
-                _path.next++;
-            }
         }
         else {
             init_path_to_noi(request.id_from, request.trait);
         }
 
-        response.target_node = _graph.get_node(_path.path[_path.next]);
+        response.target_node = _graph.get_node(_path.path[_path.next++]);
     }
     else {
         ROS_ERROR("Requested trait %d is not implemented yet.", request.trait);
