@@ -316,8 +316,6 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
     Point<double> p1 = robotToMapTransform(robot_p1);
     Point<double> p2 = robotToMapTransform(robot_p2);
 
-    markers.add_line(p1.x,p1.y,p2.x,p2.y,0.1,0.01,255,0,0);
-
     std::vector<Point<int> > obstacle_points;
 
     //line draw algorithm again to find obstacles
@@ -361,12 +359,18 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
         response.hit = true;
 
         Eigen::Vector2d hit_p(obstacle_points.begin()->x, obstacle_points.begin()->y);
-        //TODO: Transform back to robot coordinates
-        response.hit_x = hit_p(0);
-        response.hit_y = hit_p(1);
 
         response.hit_dist = (hit_p - Eigen::Vector2d(p1.x, p1.y)).norm();
+
+        dir.normalize();
+        response.hit_x = origin(0) + dir(0)*response.hit_dist;
+        response.hit_y = origin(1) + dir(1)*response.hit_dist;
     }
+
+    if (response.hit)
+        markers.add_line(p1.x-MAP_X_OFFSET,p1.y-MAP_Y_OFFSET,p2.x-MAP_X_OFFSET,p2.y-MAP_Y_OFFSET,0.1,0.01,255,0,0);
+    else
+        markers.add_line(p1.x-MAP_X_OFFSET,p1.y-MAP_Y_OFFSET,p2.x-MAP_X_OFFSET,p2.y-MAP_Y_OFFSET,0.1,0.01,0,255,0);
 
     pub_viz.publish(markers.get());
     markers.clear();

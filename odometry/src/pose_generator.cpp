@@ -11,8 +11,8 @@
 #include <navigation_msgs/Raycast.h>
 #include <vision_msgs/Planes.h>
 
-#define RAD2DEG(x) ((x)*M_PI/180.0)
-#define DEG2RAD(x) ((x)*180.0/M_PI)
+#define DEG2RAD(x) ((x)*M_PI/180.0)
+#define RAD2DEG(x) ((x)*180.0/M_PI)
 
 //------------------------------------------------------------------------------
 // Members
@@ -142,7 +142,7 @@ bool wall_close(double front, double rear) {
 double get_dy(Eigen::Matrix<double,4,1>& m)
 {
     if (wall_close(m(0,0), m(1,0) ))
-        return m(0,0) - m(1,0);
+        return -(m(0,0) - m(1,0));
     else if (wall_close(m(2,0), m(3,0)))
         return m(2,0) - m(3,0);
     else
@@ -259,7 +259,6 @@ double get_x_diff()
             return dist_to_obstacle - dist_to_plane;
         }
         else {
-            ROS_ERROR("Raycast didn't hit");
             return std::numeric_limits<double>::quiet_NaN();
         }
     }
@@ -272,7 +271,6 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
     if (_correct_theta)
     {
         _ir_dist += pack_matrix(distances);
-        std::cout << "Distances: " << _ir_dist << std::endl;
         ++_iteration;
 
         if (_iteration >= _max_iterations()) {
@@ -282,8 +280,6 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
             double dx = robot::ir::offset_front_left_forward + robot::ir::offset_rear_left_forward;
             double dy = get_dy(_ir_dist);
 
-            ROS_ERROR("dy = %lf",dy);
-
             if(isnan(dy))
                 return;
 
@@ -291,7 +287,7 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
 
             double new_theta = (_heading*M_PI_2) + angle;
 
-            ROS_ERROR("corrected theta %.3lf -> %.3lf", RAD2DEG(_theta), RAD2DEG(new_theta));
+            ROS_INFO("corrected theta %.3lf -> %.3lf", RAD2DEG(_theta), RAD2DEG(new_theta));
             _theta = new_theta;
 
             _correct_lateral = true;
@@ -316,7 +312,7 @@ void callback_turn_done(const std_msgs::BoolConstPtr& done)
 
     double angle = atan(dy/dx);
 
-    if (std::abs(angle) < M_PI_4) {
+    if (RAD2DEG(std::abs(angle)) < 10.0) {
         ROS_INFO("Attempt to correct theta by using ir sensors");
         _correct_theta = true;
     }
@@ -328,14 +324,14 @@ void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
     while (_turn_accum >= 90.0) {
         _turn_accum -= 90.0;
         _heading++;
+        if (_heading >= 3) _heading -= 4;
     }
 
     while (_turn_accum <= -90.0) {
         _turn_accum += 90.0;
         _heading--;
+        if (_heading <= -2) _heading += 4;
     }
-
-    _heading = ( (_heading+2)%4 ) - 2;
 }
 
 void callback_planes(const vision_msgs::PlanesConstPtr& planes)
@@ -422,7 +418,7 @@ int main(int argc, char **argv)
     _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
     _pub_viz = n.advertise<visualization_msgs::Marker>( "visualization_marker", 0 );
 
-    _srv_raycast = n.serviceClient<navigation_msgs::Raycast>("/mapping/raycast",true);
+    _srv_raycast = n.serviceClient<navigation_msgs::Raycast>("/mapping/raycast");
 
     ros::spin();
 
