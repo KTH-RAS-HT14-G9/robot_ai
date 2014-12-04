@@ -88,25 +88,25 @@ void Graph::set_connected(int id, int dir, int id_next)
     navigation_msgs::Node& next = _nodes[id_next];
 
     switch(dir) {
-    case North:
+    case navigation_msgs::PlaceNodeRequest::NORTH:
     {
         node.id_north = id_next;
         next.id_south = id;
         break;
     }
-    case East:
+    case navigation_msgs::PlaceNodeRequest::EAST:
     {
         node.id_east = id_next;
         next.id_west = id;
         break;
     }
-    case South:
+    case navigation_msgs::PlaceNodeRequest::SOUTH:
     {
         node.id_south = id_next;
         next.id_north = id;
         break;
     }
-    case West:
+    case navigation_msgs::PlaceNodeRequest::WEST:
     {
         node.id_west = id_next;
         next.id_east = id;
@@ -142,14 +142,14 @@ navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::Plac
         node.id_this = _nodes.size();
 
         _nodes.push_back(node);
-
-        if (_nodes.size() > 1) {
-            set_connected(request.id_previous, request.direction, node.id_this);
-        }
     }
     else {
         ROS_INFO("On node %d", node.id_this);
         update_position(_nodes[node.id_this].x, _nodes[node.id_this].y, x, y);
+    }
+
+    if (_nodes.size() > 1) {
+        set_connected(request.id_previous, request.direction, node.id_this);
     }
 
     return _nodes[node.id_this];
