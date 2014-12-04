@@ -259,7 +259,6 @@ double get_x_diff()
             return dist_to_obstacle - dist_to_plane;
         }
         else {
-            ROS_ERROR("Raycast didn't hit");
             return std::numeric_limits<double>::quiet_NaN();
         }
     }
@@ -272,7 +271,6 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
     if (_correct_theta)
     {
         _ir_dist += pack_matrix(distances);
-        std::cout << "Distances: " << _ir_dist << std::endl;
         ++_iteration;
 
         if (_iteration >= _max_iterations()) {
@@ -289,7 +287,7 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
 
             double new_theta = (_heading*M_PI_2) + angle;
 
-            ROS_ERROR("corrected theta %.3lf -> %.3lf", RAD2DEG(_theta), RAD2DEG(new_theta));
+            ROS_INFO("corrected theta %.3lf -> %.3lf", RAD2DEG(_theta), RAD2DEG(new_theta));
             _theta = new_theta;
 
             _correct_lateral = true;
@@ -334,11 +332,6 @@ void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
         _heading--;
         if (_heading <= -2) _heading += 4;
     }
-
-//    _heading = ( (_heading-1)%2) + 1;
-//    _heading = ( (_heading+2)%4 ) - 2;
-
-//    ROS_ERROR("Turned %.1lf, mod: %.2lf, heading: %d",angle->data,_turn_accum,_heading);
 }
 
 void callback_planes(const vision_msgs::PlanesConstPtr& planes)
