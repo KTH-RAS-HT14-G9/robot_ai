@@ -27,7 +27,7 @@ public:
     navigation_msgs::Node& place_object(int id_origin,
                                         navigation_msgs::PlaceNodeRequest& request);
 
-    bool on_node(float x, float y, navigation_msgs::Node& node);
+    bool on_node(float x, float y, navigation_msgs::Node &node);
 
     navigation_msgs::Node& get_node(int id);
 
@@ -38,9 +38,12 @@ public:
 
     int num_nodes() {return _nodes.size();}
 
-    double get_dist_thresh() {return _merge_thresh();}
+    double get_dist_thresh() {return _dist_thresh();}
+    double get_merge_thresh() {return _merge_thresh();}
 
 protected:
+
+    bool on_node(float x, float y, float max_dist, navigation_msgs::Node &node);
 
     void init_node(navigation_msgs::Node &node,
                    bool blocked_north, bool blocked_east,
@@ -54,14 +57,15 @@ protected:
     std::vector<navigation_msgs::Node> _nodes;
     int _next_node_id;
 
-    //Parameter<double> _dist_thresh;
+    Parameter<double> _dist_thresh;
     Parameter<double> _merge_thresh;
     Parameter<bool> _update_positions;
 };
 
 Graph::Graph()
     :_next_node_id(0)
-    ,_merge_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance/2.0)
+    ,_merge_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance/1.5)
+    ,_dist_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance)
     ,_update_positions("/navigation/graph/update_positions",false)
 {
 }
@@ -127,7 +131,7 @@ navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::Plac
     navigation_msgs::Node node;
 
     //only place node, if there is no other node close nearby
-    if (!on_node(x,y, node)) {
+    if (!on_node(x,y, _merge_thresh(), node)) {
 
         init_node(node, request.north_blocked, request.east_blocked, request.south_blocked, request.west_blocked);
 
@@ -153,7 +157,7 @@ navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::Plac
 navigation_msgs::Node& Graph::place_object(int id_origin, navigation_msgs::PlaceNodeRequest &request)
 {
     navigation_msgs::Node neighbor;
-    bool has_neighbor = on_node(request.object_x,request.object_y, neighbor);
+    bool has_neighbor = on_node(request.object_x,request.object_y, _merge_thresh(), neighbor);
 
     navigation_msgs::Node node;
 
@@ -196,7 +200,12 @@ double sq_dist(double x0, double y0, double x1, double y1)
 
 bool Graph::on_node(float x, float y, navigation_msgs::Node &node)
 {
-    double sq_dist_thresh = _merge_thresh();
+    return on_node(x,y, _dist_thresh(), node);
+}
+
+bool Graph::on_node(float x, float y, float max_dist, navigation_msgs::Node &node)
+{
+    double sq_dist_thresh = max_dist;
     sq_dist_thresh *= sq_dist_thresh;
 
     int i = 0;
