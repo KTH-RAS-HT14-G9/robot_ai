@@ -142,7 +142,7 @@ bool wall_close(double front, double rear) {
 double get_dy(Eigen::Matrix<double,4,1>& m)
 {
     if (wall_close(m(0,0), m(1,0) ))
-        return m(0,0) - m(1,0);
+        return -(m(0,0) - m(1,0));
     else if (wall_close(m(2,0), m(3,0)))
         return m(2,0) - m(3,0);
     else
