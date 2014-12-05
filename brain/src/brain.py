@@ -69,12 +69,14 @@ class M3Explore(smach.State):
         smach.State.__init__(self, outcomes=['m3_explore','obstacle_detected', 'object_detected', 'm3_go_to_start'])
 
     def execute(self, userdata):
-        follow_wall(True)
-        go_forward(True)
-        update_walls_changed()
 
         if object_reached: 
             rospy.logerr("SUCCESS! OBJECT REACHED AGAIN")
+            sys.exit(0)
+
+        follow_wall(True)
+        go_forward(True)
+        update_walls_changed()
 
         if m3_object_recognized:
             go_forward(False)
@@ -148,9 +150,14 @@ class M3GoToObject(smach.State):
         global object_reached
         next_node = get_next_noi(1)
         rospy.logerr("current_node: %s next_node: %s", current_node, next_node)
-        if(next_node.id_this == current_node.id_this):
+
+        if(next_node.object_here):
             rospy.loginfo("Destination reached")
             rospy.loginfo("M3_GO_TO_OBJECT ==> OBJECT_DETECTED")
+            go_forward(False)
+            follow_wall(False)
+
+            turn(-90.0)
             object_reached = True
             return 'object_detected'
        
@@ -253,8 +260,9 @@ class ObjectDetected(smach.State):
             if has_turned:
                 turn(-object_angle)
 
-        place_node(True)
-        m3_object_recognized = True
+        if detected_object.type != -1:
+            place_node(True)
+            m3_object_recognized = True
 
         rospy.loginfo("OBJECT_DETECTED ==> EXPLORE")
         reset_node_detected()
@@ -436,7 +444,7 @@ def walls_changed():
 def go_to_node(node):
     global go_to_node_done
     go_to_node_done[0] = False
-    rospy.logerr("GO TO NODE: node")
+    rospy.logerr("GO TO NODE: %d", node.id_this)
     go_to_node_pub.publish(node)
 
 def is_at_intersection():
@@ -496,8 +504,10 @@ def object_detected_callback(new_object):
    # if distance_between(new_object, detected_object) > 0.2 or (new_object.type != -1 and new_object.type != object_detected.type):
     rospy.logerr("NEW OBJECT X=%f, Y=%f, TYPE=%d", new_object.x, new_object.y, new_object.type)
     rospy.loginfo("Object detected")
-    detected_object = new_object
-    object_detected = True
+    
+    if new_object.type != -1:
+        detected_object = new_object
+        object_detected = True
     #if detected_object.type != -1:
     #    recognition_clock = rospy.get_time()
 
