@@ -132,7 +132,7 @@ void GraphViz::draw_node(int id, bool highlight)
         std::string label = static_cast<std::ostringstream*>( &(std::ostringstream() << node.id_this) )->str();
         marker_id.id_node = _marker.add_cube(node.x,node.y,scale, color_node.r, color_node.g, color_node.b, marker_id.id_node);
         marker_id.id_circle_on = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_circle_on.r, color_circle_on.g, color_circle_on.b, 50, marker_id.id_circle_on);
-        marker_id.id_circle_merge = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_dist_thresh()*2.0, color_circle_merge.r, color_circle_merge.g, color_circle_merge.b, 50, marker_id.id_circle_merge);
+        marker_id.id_circle_merge = _marker.add_circle(node.x,node.y, 0.00001, _graph.get_merge_thresh()*2.0, color_circle_merge.r, color_circle_merge.g, color_circle_merge.b, 50, marker_id.id_circle_merge);
         marker_id.id_label = _marker.add_text(node.x,node.y, scale*4.0f, label, 255,255,255, marker_id.id_label);
     }
 
