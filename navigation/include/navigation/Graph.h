@@ -28,6 +28,7 @@ public:
                                         navigation_msgs::PlaceNodeRequest& request);
 
     bool on_node(float x, float y, navigation_msgs::Node &node);
+    bool on_object_node(float x, float y, navigation_msgs::Node& node);
 
     navigation_msgs::Node& get_node(int id);
 
@@ -158,13 +159,12 @@ navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::Plac
 navigation_msgs::Node& Graph::place_object(int id_origin, navigation_msgs::PlaceNodeRequest &request)
 {
     navigation_msgs::Node neighbor;
-    bool has_neighbor = on_node(request.object_x,request.object_y, _merge_thresh(), neighbor);
+    bool has_neighbor = on_object_node(request.object_x,request.object_y, neighbor);
 
     navigation_msgs::Node node;
 
-    //only place object node, if there is no other node close nearby,
-    //or if the neighbor is not an object node
-    if (!has_neighbor || neighbor.object_here == false) {
+    //only place object node, if there is no other object node close nearby,
+    if (!has_neighbor) {
 
         init_node(node, true, true, true, true);
 
@@ -202,6 +202,38 @@ double sq_dist(double x0, double y0, double x1, double y1)
 bool Graph::on_node(float x, float y, navigation_msgs::Node &node)
 {
     return on_node(x,y, _dist_thresh(), node);
+}
+
+bool Graph::on_object_node(float x, float y, navigation_msgs::Node& node)
+{
+    double sq_dist_thresh = _merge_thresh();
+    sq_dist_thresh *= sq_dist_thresh;
+
+    int i = 0;
+    int closest = 0;
+    double min_dist = std::numeric_limits<double>::infinity();
+
+    for(std::vector<navigation_msgs::Node>::iterator it = _nodes.begin(); it != _nodes.end(); ++it, ++i)
+    {
+        if (it->object_here) {
+
+            double sq_d = sq_dist(x,y, it->x, it->y);
+
+            if (sq_d < min_dist) {
+                min_dist = sq_d;
+                closest = i;
+            }
+        }
+    }
+
+    //ROS_INFO("Distance to node: ")
+
+    if (min_dist < sq_dist_thresh) {
+        node = _nodes[closest];
+        return true;
+    }
+
+    return false;
 }
 
 bool Graph::on_node(float x, float y, float max_dist, navigation_msgs::Node &node)
