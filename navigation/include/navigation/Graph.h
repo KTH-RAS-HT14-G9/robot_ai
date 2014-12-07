@@ -83,8 +83,8 @@ protected:
 Graph::Graph()
     :_next_node_id(0)
     ,_merge_thresh("/navigation/graph/merge_thresh",robot::dim::wheel_distance/1.5)
-    ,_dist_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance)
-    ,_update_positions("/navigation/graph/update_positions",false)
+    ,_dist_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance/1.5)
+    ,_update_positions("/navigation/graph/update_positions",true)
 {
 }
 
