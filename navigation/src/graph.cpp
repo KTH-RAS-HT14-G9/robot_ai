@@ -148,6 +148,9 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
             init_path_to_noi(request.id_from, request.trait);
         }
 
+        if (_path.path.size() > 1)
+            _path.next++;
+
         response.target_node = _graph.get_node(_path.path[_path.next++]);
     }
     else {
