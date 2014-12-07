@@ -7,6 +7,8 @@
 #include <navigation/GraphViz.h>
 #include <tf/transform_listener.h>
 #include <tf/transform_datatypes.h>
+#include <boost/random.hpp>
+#include <boost/random/normal_distribution.hpp>
 
 
 #define NODE_TRAIT_UNKNOWN 0
@@ -77,25 +79,20 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
     float x = _position.x;
     float y = _position.y;
 
-    //if(robotToMapTransform(x,y, x,y))
-    {
-
-        response.generated_node = _graph.place_node(x, y, request);
-        if (request.id_previous >= 0) {
-            navigation_msgs::Node prev_node = _graph.get_node(request.id_previous);
-            ROS_INFO("Place node. %d(%.2f,%.2f) -> %d(%.2f,%.2f)", request.id_previous, prev_node.x,prev_node.y, response.generated_node.id_this, response.generated_node.x, response.generated_node.y);
-        }
-
-        if (request.object_here == true) {
-            if(robotToMapTransform(x,y, x,y)) {
-                robotToMapTransform(x,y, x,y);
-                _graph.place_object(response.generated_node.id_this, request);
-            }
-            else success = false;
-        }
-
+    response.generated_node = _graph.place_node(x, y, request);
+    if (request.id_previous >= 0) {
+        navigation_msgs::Node prev_node = _graph.get_node(request.id_previous);
+        ROS_INFO("Place node. %d(%.2f,%.2f) -> %d(%.2f,%.2f)", request.id_previous, prev_node.x,prev_node.y, response.generated_node.id_this, response.generated_node.x, response.generated_node.y);
     }
-    //else success = false;
+
+    if (request.object_here == true) {
+
+        if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
+        {
+            _graph.place_object(response.generated_node.id_this, request);
+        }
+        else success = false;
+    }
 
     return success;
 }
@@ -120,6 +117,12 @@ void init_path_to_noi(int id_from, int trait) {
     }
     else
         ROS_ERROR("Requested trait %d is not implemented yet.", trait);
+
+//    std::cout << "Path: ";
+//    for(int i = 0; i < _path.path.size(); ++i) {
+//        std::cout << _path.path[i] << " ";
+//    }
+//    std::cout << std::endl;
 }
 
 bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
@@ -163,6 +166,125 @@ void test_request(int id_prev, int dir, bool blocked_n, bool blocked_e, bool blo
     request.east_blocked = blocked_e;
     request.south_blocked = blocked_s;
     request.west_blocked = blocked_w;
+}
+
+class Point {
+public:
+    Point(double xv,double yv)
+        :x(xv),y(yv){}
+    double x,y;
+    int dir;
+};
+
+void linspace(std::vector<Point>& target, Point from, Point to, int dir, int steps)
+{
+    boost::mt19937 rng;
+    boost::normal_distribution<> nd(0.0, 0.1);
+    boost::variate_generator<boost::mt19937&,boost::normal_distribution<> > var_nor(rng,nd);
+
+    Point cur = from;
+    cur.dir = dir;
+    double incX = (to.x-from.x)/steps;
+    double incY = (to.y-from.y)/steps;
+    for(int i = 0; i < steps; ++i)
+    {
+        target.push_back(cur);
+        cur.x += incX + var_nor();
+        cur.y += incY + var_nor();
+    }
+
+    target.push_back(cur);
+}
+
+int _test2_i = 0;
+navigation_msgs::Node _test2_previous_node;
+
+void test2_graph_build(std::vector<Point>& points) {
+
+    Point p0(0,0);
+    Point p1(2,0);
+    Point p2(2,1);
+    Point p3(2,-1);
+    Point pObject(2,-1.5); pObject.dir = navigation_msgs::Node::SOUTH;
+
+    linspace(points, p0, p1, navigation_msgs::Node::EAST, 5);
+    p1 = points[points.size()-1];
+    linspace(points, p1, p2, navigation_msgs::Node::NORTH, 5);
+    p2 = points[points.size()-1];
+    linspace(points, p2, p3, navigation_msgs::Node::SOUTH, 5);
+    p3 = points[points.size()-1];
+    points.push_back(pObject);
+
+    _test2_previous_node.id_this = -1;
+}
+
+void print_graph()
+{
+    for(int i = 0; i < _graph.num_nodes(); ++i)
+    {
+        navigation_msgs::Node& node = _graph.get_node(i);
+        int north = node.edges[navigation_msgs::Node::NORTH];
+        int east = node.edges[navigation_msgs::Node::EAST];
+        int south = node.edges[navigation_msgs::Node::SOUTH];
+        int west = node.edges[navigation_msgs::Node::WEST];
+        int obj = node.edges[navigation_msgs::Node::OBJECT];
+        ROS_ERROR("Node %d \t: N=%d E=%d S=%d W=%d Obj=%d, ObjHere=%d",node.id_this,north,east,south,west,obj,node.object_here);
+    }
+}
+
+void test2_graph(const std::vector<Point>& points)
+{
+    if (_test2_i >= points.size()) {
+        //find shortest path to start node
+        navigation_msgs::NextNodeOfInterestRequest request;
+        navigation_msgs::NextNodeOfInterestResponse response;
+
+        request.id_from = _test2_previous_node.id_this;
+        request.trait = navigation_msgs::NextNodeOfInterestRequest::TRAIT_START;
+
+        print_graph();
+
+        service_next_noi(request, response);
+        return;
+    }
+
+    navigation_msgs::PlaceNodeRequest request;
+    navigation_msgs::PlaceNodeResponse response;
+
+    const Point& p = points[_test2_i];
+
+    request.object_here = false;
+    request.east_blocked = true;
+    request.west_blocked = true;
+    request.north_blocked = true;
+    request.south_blocked = true;
+    request.id_previous =  _test2_previous_node.id_this;
+
+    if (_test2_i == points.size()-1)
+    {
+        request.direction = points[_test2_i-1].dir;
+
+        request.object_here = true;
+        request.object_type = 0;
+        request.object_direction = p.dir;
+        request.object_x = p.x;
+        request.object_y = p.y;
+    }
+    else
+    {
+        request.direction = p.dir;
+        _position.x = p.x;
+        _position.y = p.y;
+    }
+
+    service_place_node(request, response);
+
+    print_graph();
+
+    _test2_previous_node = response.generated_node;
+
+
+    _test2_i++;
 }
 
 void test_graph() {
@@ -229,9 +351,6 @@ int main(int argc, char **argv)
 
     _path.next = 0;
 
-    bool test = false;
-    /*test_graph(); test=true;*/
-
     ros::NodeHandle n;
 
     _pub_on_node = n.advertise<navigation_msgs::Node>("/navigation/graph/on_node",10);
@@ -247,21 +366,22 @@ int main(int argc, char **argv)
 
     ros::Rate rate(10.0);
 
+    std::vector<Point> test_points;
+    test2_graph_build(test_points);
+
     while(n.ok())
     {
+        //test2_graph(test_points);
+
         float x = _position.x;
         float y = _position.y;
-        //if(robotToMapTransform(x,y, x,y))
-        {
 
-            if (_graph.on_node(x,y, node)) {
-                _pub_on_node.publish(node);
-                _graph_viz->highlight_node(node.id_this,true);
-            }
-
-            _graph_viz->draw();
-
+        if (_graph.on_node(x,y, node)) {
+            _pub_on_node.publish(node);
+            _graph_viz->highlight_node(node.id_this,true);
         }
+
+        _graph_viz->draw();
 
         ros::spinOnce();
         rate.sleep();
