@@ -36,7 +36,12 @@ public:
     void path_to_next_object(int id_from, std::vector<int>& path);
     void path_to_node(int id_from, int id_to, std::vector<int>& path);
 
+    int get_closest_node(float x, float y, bool consider_obj, double& min_dist);
+
     bool has_unkown_directions(int id);
+    bool is_connected(int id, int id_next);
+    bool is_free_connection(int id, int dir);
+    bool is_connectable(int id, int dir, int id_next);
 
     int num_nodes() {return _nodes.size();}
 
@@ -46,6 +51,7 @@ public:
 protected:
 
     bool on_node(float x, float y, float max_dist, navigation_msgs::Node &node);
+    bool on_node_auto_recover(float x, float y, navigation_msgs::PlaceNodeRequest& request, navigation_msgs::Node& node);
 
     void init_node(navigation_msgs::Node &node,
                    bool blocked_north, bool blocked_east,
@@ -55,6 +61,8 @@ protected:
     void update_position(float& x, float& y, float new_x, float new_y);
 
     void path_to_poi(int id_from, const std::vector<bool>& filter, std::vector<int>& path);
+
+    int panic_forwarding(int id, int dir);
 
     std::vector<navigation_msgs::Node> _nodes;
     int _next_node_id;
@@ -83,8 +91,124 @@ void Graph::init_node(navigation_msgs::Node &node,
     node.object_here = false;
 }
 
+bool Graph::is_free_connection(int id, int dir)
+{
+    switch(dir) {
+    case navigation_msgs::PlaceNodeRequest::NORTH:
+    {
+        if (_nodes[id].id_north >= 0) return false;
+        break;
+    }
+    case navigation_msgs::PlaceNodeRequest::EAST:
+    {
+        if (_nodes[id].id_east >= 0) return false;
+        break;
+    }
+    case navigation_msgs::PlaceNodeRequest::SOUTH:
+    {
+        if (_nodes[id].id_south >= 0) return false;
+        break;
+    }
+    case navigation_msgs::PlaceNodeRequest::WEST:
+    {
+        if (_nodes[id].id_west >= 0) return false;
+        break;
+    }
+    default:
+    {
+        ROS_ERROR("[Graph::is_connectable] Direction %d does not exist",dir);
+        return false;
+    }
+    }
+    return true;
+}
+
+bool Graph::is_connected(int id, int id_next)
+{
+    navigation_msgs::Node& node = _nodes[id];
+
+    return
+        node.id_north == id_next ||
+        node.id_east == id_next  ||
+        node.id_south == id_next ||
+        node.id_west == id_next;
+}
+
+bool Graph::is_connectable(int id, int dir, int id_next)
+{
+    if (id == -1 || id_next == -1 || id == id_next || is_connected(id, id_next))
+    {
+        if (is_connected(id, id_next))
+            ROS_WARN("Connection %d --> %d already exists.",id, id_next);
+        return false;
+    }
+
+    navigation_msgs::Node& node = _nodes[id];
+    navigation_msgs::Node& next = _nodes[id_next];
+
+    switch(dir) {
+    case navigation_msgs::PlaceNodeRequest::NORTH:
+    {
+        if (node.id_north >= 0) {
+            ROS_WARN("Node %d has already a connection in direction N", node.id_this);
+            return false;
+        }
+        if (next.id_south >= 0) {
+            ROS_WARN("Node %d has already a connection in direction S", next.id_this);
+            return false;
+        }
+        break;
+    }
+    case navigation_msgs::PlaceNodeRequest::EAST:
+    {
+        if (node.id_east >= 0) {
+            ROS_WARN("Node %d has already a connection in direction E", node.id_this);
+            return false;
+        }
+        if (next.id_west >= 0) {
+            ROS_WARN("Node %d has already a connection in direction W", next.id_this);
+            return false;
+        }
+        break;
+    }
+    case navigation_msgs::PlaceNodeRequest::SOUTH:
+    {
+        if (node.id_south >= 0) {
+            ROS_WARN("Node %d has already a connection in direction S", node.id_this);
+            return false;
+        }
+        if (next.id_north >= 0) {
+            ROS_WARN("Node %d has already a connection in direction N", next.id_this);
+            return false;
+        }
+        break;
+    }
+    case navigation_msgs::PlaceNodeRequest::WEST:
+    {
+        if (node.id_west >= 0) {
+            ROS_WARN("Node %d has already a connection in direction W", node.id_this);
+            return false;
+        }
+        if (next.id_east >= 0) {
+            ROS_WARN("Node %d has already a connection in direction E", next.id_this);
+            return false;
+        }
+        break;
+    }
+    default:
+    {
+        ROS_ERROR("[Graph::is_connectable] Direction %d does not exist",dir);
+        break;
+    }
+    }
+    return true;
+}
+
 void Graph::set_connected(int id, int dir, int id_next)
 {
+    if (!is_connectable(id, dir, id_next))
+        return;
+
     navigation_msgs::Node& node = _nodes[id];
     navigation_msgs::Node& next = _nodes[id_next];
 
@@ -115,7 +239,8 @@ void Graph::set_connected(int id, int dir, int id_next)
     }
     default:
     {
-        ROS_ERROR("[Graph::set_adjacent] Direction %d does not exist",dir);
+        ROS_ERROR("[Graph::set_connected] Direction %d does not exist",dir);
+        break;
     }
     }
 }
@@ -128,12 +253,74 @@ void Graph::update_position(float& x, float& y, float new_x, float new_y)
     }
 }
 
+/**
+  * Panic forwarding for trying to sustain a reasonable graph.
+  * Starting at the node with id,
+  * moves in the given direction, until a node with a free edge
+  * in direction dir is availbale.
+  */
+int Graph::panic_forwarding(int id, int dir)
+{
+    navigation_msgs::Node& node = _nodes[id];
+
+    while(!is_free_connection(node.id_this,dir)) {
+        switch(dir) {
+        case navigation_msgs::PlaceNodeRequest::NORTH:
+        {
+            node = _nodes[node.id_north];
+            break;
+        }
+        case navigation_msgs::PlaceNodeRequest::EAST:
+        {
+            node = _nodes[node.id_east];
+            break;
+        }
+        case navigation_msgs::PlaceNodeRequest::SOUTH:
+        {
+            node = _nodes[node.id_south];
+            break;
+        }
+        case navigation_msgs::PlaceNodeRequest::WEST:
+        {
+            node = _nodes[node.id_west];
+            break;
+        }
+        }
+    }
+
+    return node.id_this;
+}
+
+bool Graph::on_node_auto_recover(float x, float y, navigation_msgs::PlaceNodeRequest& request, navigation_msgs::Node& node)
+{
+    if (request.id_previous == -1) return false;
+
+    if (!on_node(x,y, _merge_thresh(), node)) {
+        //check if there is a free edge at the previous id
+        if (is_free_connection(request.id_previous, request.direction))
+            return false;
+        else
+        {
+            //determine closest
+            double dist;
+            int closest = get_closest_node(x,y, false, dist);
+
+            request.id_previous = closest;
+
+            node = _nodes[closest];
+
+            return true;
+        }
+    }
+    else return true;
+}
+
 navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::PlaceNodeRequest &request)
 {
     navigation_msgs::Node node;
 
     //only place node, if there is no other node close nearby
-    if (!on_node(x,y, _merge_thresh(), node)) {
+    if (!on_node_auto_recover(x,y,request,node)) {
 
         init_node(node, request.north_blocked, request.east_blocked, request.south_blocked, request.west_blocked);
 
@@ -149,9 +336,8 @@ navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::Plac
         update_position(_nodes[node.id_this].x, _nodes[node.id_this].y, x, y);
     }
 
-    if (_nodes.size() > 1) {
+    if (is_connectable(request.id_previous, request.direction, node.id_this))
         set_connected(request.id_previous, request.direction, node.id_this);
-    }
 
     return _nodes[node.id_this];
 }
@@ -204,18 +390,15 @@ bool Graph::on_node(float x, float y, navigation_msgs::Node &node)
     return on_node(x,y, _dist_thresh(), node);
 }
 
-bool Graph::on_object_node(float x, float y, navigation_msgs::Node& node)
+int Graph::get_closest_node(float x, float y, bool consider_obj, double& min_dist)
 {
-    double sq_dist_thresh = _merge_thresh();
-    sq_dist_thresh *= sq_dist_thresh;
-
     int i = 0;
-    int closest = 0;
-    double min_dist = std::numeric_limits<double>::infinity();
+    int closest = -1;
+    min_dist = std::numeric_limits<double>::infinity();
 
     for(std::vector<navigation_msgs::Node>::iterator it = _nodes.begin(); it != _nodes.end(); ++it, ++i)
     {
-        if (it->object_here) {
+        if (consider_obj == it->object_here) {
 
             double sq_d = sq_dist(x,y, it->x, it->y);
 
@@ -226,7 +409,17 @@ bool Graph::on_object_node(float x, float y, navigation_msgs::Node& node)
         }
     }
 
-    //ROS_INFO("Distance to node: ")
+    return closest;
+}
+
+bool Graph::on_object_node(float x, float y, navigation_msgs::Node& node)
+{
+    double sq_dist_thresh = _merge_thresh();
+    sq_dist_thresh *= sq_dist_thresh;
+
+    double min_dist;
+    int closest = get_closest_node(x,y,true,min_dist);
+    if (closest == -1) return false;
 
     if (min_dist < sq_dist_thresh) {
         node = _nodes[closest];
@@ -241,21 +434,9 @@ bool Graph::on_node(float x, float y, float max_dist, navigation_msgs::Node &nod
     double sq_dist_thresh = max_dist;
     sq_dist_thresh *= sq_dist_thresh;
 
-    int i = 0;
-    int closest = 0;
-    double min_dist = std::numeric_limits<double>::infinity();
-
-    for(std::vector<navigation_msgs::Node>::iterator it = _nodes.begin(); it != _nodes.end(); ++it, ++i)
-    {
-        double sq_d = sq_dist(x,y, it->x, it->y);
-
-        if (sq_d < min_dist) {
-            min_dist = sq_d;
-            closest = i;
-        }
-    }
-
-    //ROS_INFO("Distance to node: ")
+    double min_dist;
+    int closest = get_closest_node(x,y,false,min_dist);
+    if (closest == -1) return false;
 
     if (min_dist < sq_dist_thresh) {
         node = _nodes[closest];
