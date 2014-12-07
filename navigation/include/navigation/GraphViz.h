@@ -142,7 +142,7 @@ void GraphViz::draw_node(int id, bool highlight)
             marker_id.id_north = _marker.add_line(node.x,node.y, node.x, node.y+0.2, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.id_north);
         else {
             navigation_msgs::Node& next = _graph.get_node(node.id_north);
-            marker_id.id_north = _marker.add_line(node.x,node.y, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_north);
+            marker_id.id_north = _marker.add_line(node.x,node.y+scale, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_north);
         }
     }
 
@@ -151,7 +151,7 @@ void GraphViz::draw_node(int id, bool highlight)
             marker_id.id_east = _marker.add_line(node.x,node.y, node.x+0.2, node.y, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.id_east);
         else {
             navigation_msgs::Node& next = _graph.get_node(node.id_east);
-            marker_id.id_east = _marker.add_line(node.x,node.y, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_east);
+            marker_id.id_east = _marker.add_line(node.x+scale,node.y, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_east);
         }
     }
 
@@ -160,7 +160,7 @@ void GraphViz::draw_node(int id, bool highlight)
             marker_id.id_south = _marker.add_line(node.x,node.y, node.x, node.y-0.2, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.id_south);
         else {
             navigation_msgs::Node& next = _graph.get_node(node.id_south);
-             marker_id.id_south = _marker.add_line(node.x,node.y, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_south);
+             marker_id.id_south = _marker.add_line(node.x,node.y-scale, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_south);
         }
     }
 
@@ -169,7 +169,7 @@ void GraphViz::draw_node(int id, bool highlight)
             marker_id.id_west = _marker.add_line(node.x,node.y, node.x-0.2, node.y, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.id_west);
         else {
             navigation_msgs::Node& next = _graph.get_node(node.id_west);
-            marker_id.id_west = _marker.add_line(node.x,node.y, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_west);
+            marker_id.id_west = _marker.add_line(node.x-scale,node.y, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_west);
         }
     }
 
