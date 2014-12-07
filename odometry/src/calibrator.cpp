@@ -134,7 +134,7 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
     }
 }
 
-void connect_callback(const ros::SingleSubscriberPublisher& pub)
+void connect_odometry_callback(const ros::SingleSubscriberPublisher& pub)
 {
     pack_pose(_q,_odom);
     pub.publish(_odom);
@@ -176,7 +176,7 @@ int main(int argc, char **argv)
     ros::Subscriber sub_turn_done = n.subscribe("/controller/turn/done",10,callback_turn_done);
     ros::Subscriber sub_fwd_done = n.subscribe("/controller/forward/stopped",10,callback_fwd_stopped);
 
-    _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
+    _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_odometry_callback);
     _pub_turn = n.advertise<std_msgs::Float64>("/controller/turn/angle",10);
     _pub_fwd = n.advertise<std_msgs::Bool>("/controller/forward/active",10,true);
 
