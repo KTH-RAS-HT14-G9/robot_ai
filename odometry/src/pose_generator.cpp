@@ -6,6 +6,7 @@
 #include <visualization_msgs/Marker.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float64.h>
+#include <std_msgs/Int8.h>
 #include <ir_converter/Distance.h>
 #include <common/parameter.h>
 #include <navigation_msgs/Raycast.h>
@@ -35,6 +36,7 @@ vision_msgs::Plane _front_plane;
 
 ros::Publisher _pub_odom;
 ros::Publisher _pub_viz;
+ros::Publisher _pub_compass;
 ros::ServiceClient _srv_raycast;
 
 //------------------------------------------------------------------------------
@@ -118,10 +120,37 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
     send_marker(transform);
 }
 
-void connect_callback(const ros::SingleSubscriberPublisher& pub)
+int get_compass()
+{
+    /**
+      * -1 -> S -> 2
+      *  0 -> E -> 1
+      *  1 -> N -> 0
+      *  2 -> W -> 3
+      */
+
+    switch(_heading+1) {
+    case 0: return 2;
+    case 1: return 1;
+    case 2: return 0;
+    case 3: return 3;
+    }
+
+    ROS_ERROR("[pose_generator::get_compass] Unexpected heading %d", _heading);
+    return -1;
+}
+
+void connect_odometry_callback(const ros::SingleSubscriberPublisher& pub)
 {
     pack_pose(_q,_odom);
     pub.publish(_odom);
+}
+
+void connect_compass_callback(const ros::SingleSubscriberPublisher& pub)
+{
+    std_msgs::Int8 msg;
+    msg.data = get_compass();
+    pub.publish(msg);
 }
 
 Eigen::Matrix<double, 4, 1> pack_matrix(const ir_converter::DistanceConstPtr& distances)
@@ -323,7 +352,7 @@ void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
 //    std::stringstream ss;
 //    ss << "Turning by angle: " << angle->data << ". Accum= " << _turn_accum << ", Heading= " << _heading;
 
-   _turn_accum += angle->data;
+    _turn_accum += angle->data;
 
     while (_turn_accum > 45.0) {
         _turn_accum -= 90.0;
@@ -338,8 +367,11 @@ void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
     }
 
 //    ss << "\nCorrected heading = " << _heading << ", new accum= " << _turn_accum << std::endl;
-
 //    ROS_ERROR("%s",ss.str().c_str());
+
+    std_msgs::Int8 msg;
+    msg.data = get_compass();
+    _pub_compass.publish(msg);
 }
 
 void callback_planes(const vision_msgs::PlanesConstPtr& planes)
@@ -423,8 +455,10 @@ int main(int argc, char **argv)
     ros::Subscriber sub_turn_done = n.subscribe("/controller/turn/done",10,callback_turn_done);
     ros::Subscriber sub_ir = n.subscribe("/perception/ir/distance",10,callback_ir);
     ros::Subscriber sub_planes = n.subscribe("/vision/obstacles/planes",10,callback_planes);
-    _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_callback);
+
+    _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_odometry_callback);
     _pub_viz = n.advertise<visualization_msgs::Marker>( "visualization_marker", 0 );
+    _pub_compass = n.advertise<std_msgs::Int8>("/pose/compass", 10, (ros::SubscriberStatusCallback)connect_compass_callback);
 
     _srv_raycast = n.serviceClient<navigation_msgs::Raycast>("/mapping/raycast");
 
