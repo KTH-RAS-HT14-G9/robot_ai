@@ -19,17 +19,15 @@ protected:
     public:
         MarkerID()
             :id_node(-1)
-            ,id_north(-1)
-            ,id_east(-1)
-            ,id_south(-1)
-            ,id_west(-1)
             ,id_circle_on(-1)
             ,id_circle_merge(-1)
             ,id_label(-1)
-        {}
+        {
+            edges.resize(5,-1);
+        }
 
         int id_node;
-        int id_north, id_east, id_south, id_west;
+        std::vector<int> edges;
         int id_circle_on, id_circle_merge, id_label;
     };
 
@@ -91,7 +89,8 @@ void GraphViz::draw()
 
 void GraphViz::draw_node(int id, bool highlight)
 {
-    navigation_msgs::Node& node = _graph.get_node(id);
+    using namespace navigation_msgs;
+    Node& node = _graph.get_node(id);
     MarkerID& marker_id = _marker_ids.at(id);
 
     static common::Color color_regular(131,178,75);
@@ -136,40 +135,28 @@ void GraphViz::draw_node(int id, bool highlight)
         marker_id.id_label = _marker.add_text(node.x,node.y, scale*4.0f, label, 255,255,255, marker_id.id_label);
     }
 
-    //draw edges
-    if (node.id_north >= NAV_GRAPH_UNKNOWN) {
-        if (node.id_north == NAV_GRAPH_UNKNOWN)
-            marker_id.id_north = _marker.add_line(node.x,node.y, node.x, node.y+0.2, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.id_north);
-        else {
-            navigation_msgs::Node& next = _graph.get_node(node.id_north);
-            marker_id.id_north = _marker.add_line(node.x,node.y+scale, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_north);
-        }
-    }
+    for(int i = 0; i < node.edges.size(); ++i)
+    {
+        if (node.edges[i] >= NAV_GRAPH_UNKNOWN) {
+            double dx = 0, dy = 0;
+            if (i == Node::NORTH) dy = +1.0;
+            if (i == Node::EAST)  dx = +1.0;
+            if (i == Node::SOUTH) dy = -1.0;
+            if (i == Node::WEST)  dx = -1.0;
 
-    if (node.id_east >= NAV_GRAPH_UNKNOWN) {
-        if (node.id_east == NAV_GRAPH_UNKNOWN)
-            marker_id.id_east = _marker.add_line(node.x,node.y, node.x+0.2, node.y, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.id_east);
-        else {
-            navigation_msgs::Node& next = _graph.get_node(node.id_east);
-            marker_id.id_east = _marker.add_line(node.x+scale,node.y, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_east);
-        }
-    }
+            if (node.edges[i] == NAV_GRAPH_UNKNOWN)
+            {
+                double s = 0.2;
+                marker_id.edges[i] = _marker.add_line(node.x,node.y, node.x+s*dx, node.y+s*dy, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.edges[i]);
+            }
+            else
+            {
+                common::Color& color = (i == Node::OBJECT) ? color_object : color_edge;
 
-    if (node.id_south >= NAV_GRAPH_UNKNOWN) {
-        if (node.id_south == NAV_GRAPH_UNKNOWN)
-            marker_id.id_south = _marker.add_line(node.x,node.y, node.x, node.y-0.2, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.id_south);
-        else {
-            navigation_msgs::Node& next = _graph.get_node(node.id_south);
-             marker_id.id_south = _marker.add_line(node.x,node.y-scale, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_south);
-        }
-    }
-
-    if (node.id_west >= NAV_GRAPH_UNKNOWN) {
-        if (node.id_west == NAV_GRAPH_UNKNOWN)
-            marker_id.id_west = _marker.add_line(node.x,node.y, node.x-0.2, node.y, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.id_west);
-        else {
-            navigation_msgs::Node& next = _graph.get_node(node.id_west);
-            marker_id.id_west = _marker.add_line(node.x-scale,node.y, next.x,next.y, line_z, thickness, color_edge.r, color_edge.g, color_edge.b, marker_id.id_west);
+                double s = scale;
+                navigation_msgs::Node& next = _graph.get_node(node.edges[i]);
+                marker_id.edges[i] = _marker.add_line(node.x+s*dx,node.y+s*dy, next.x,next.y, line_z, thickness, color.r, color.g, color.b, marker_id.edges[i]);
+            }
         }
     }
 
