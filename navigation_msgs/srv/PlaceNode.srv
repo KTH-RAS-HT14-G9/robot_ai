@@ -1,10 +1,5 @@
 int32 id_previous
 
-int32 NORTH=0
-int32 EAST=1
-int32 SOUTH=2
-int32 WEST=3
-
 int32 direction
 
 bool north_blocked
