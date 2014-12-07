@@ -312,7 +312,7 @@ void callback_turn_done(const std_msgs::BoolConstPtr& done)
 
     double angle = atan(dy/dx);
 
-    if (RAD2DEG(std::abs(angle)) < 10.0) {
+    if (RAD2DEG(std::abs(angle)) < 10.0 && std::abs(_turn_accum) < 20.0) {
         ROS_INFO("Attempt to correct theta by using ir sensors");
         _correct_theta = true;
     }
@@ -320,18 +320,26 @@ void callback_turn_done(const std_msgs::BoolConstPtr& done)
 
 void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
 {
-    _turn_accum += angle->data;
-    while (_turn_accum >= 90.0) {
+//    std::stringstream ss;
+//    ss << "Turning by angle: " << angle->data << ". Accum= " << _turn_accum << ", Heading= " << _heading;
+
+   _turn_accum += angle->data;
+
+    while (_turn_accum > 45.0) {
         _turn_accum -= 90.0;
         _heading++;
         if (_heading >= 3) _heading -= 4;
     }
 
-    while (_turn_accum <= -90.0) {
+    while (_turn_accum < -45.0) {
         _turn_accum += 90.0;
         _heading--;
         if (_heading <= -2) _heading += 4;
     }
+
+//    ss << "\nCorrected heading = " << _heading << ", new accum= " << _turn_accum << std::endl;
+
+//    ROS_ERROR("%s",ss.str().c_str());
 }
 
 void callback_planes(const vision_msgs::PlanesConstPtr& planes)
