@@ -8,4 +8,4 @@ int32 trait
 
 ---
 
-Node target_node
+Node[] path

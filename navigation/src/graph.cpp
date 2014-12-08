@@ -132,26 +132,29 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
          request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_OBJECT ||
          request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_START )
     {
-        //if we haven't finished an existing path: advance a step
-        if (_path.next < _path.path.size())
-        {
-            if (request.trait != _path.trait) {
-                ROS_ERROR("Trait was changed during path following. Will service request anyway.");
-                init_path_to_noi(request.id_from, request.trait);
-            }
-            if (request.id_from != _path.path[_path.next]) {
-                ROS_ERROR("Last path was not completed. Will service request anyway.");
-                init_path_to_noi(request.id_from, request.trait);
-            }
-        }
-        else {
-            init_path_to_noi(request.id_from, request.trait);
-        }
+//        //if we haven't finished an existing path: advance a step
+//        if (_path.next < _path.path.size())
+//        {
+//            if (request.trait != _path.trait) {
+//                ROS_ERROR("Trait was changed during path following. Will service request anyway.");
+//                init_path_to_noi(request.id_from, request.trait);
+//            }
+//            if (request.id_from != _path.path[_path.next]) {
+//                ROS_ERROR("Last path was not completed. Will service request anyway.");
+//                init_path_to_noi(request.id_from, request.trait);
+//            }
+//        }
+//        else {
+//            init_path_to_noi(request.id_from, request.trait);
+//        }
 
-        if (_path.path.size() > 1)
-            _path.next++;
+        init_path_to_noi(request.id_from, request.trait);
 
-        response.target_node = _graph.get_node(_path.path[_path.next++]);
+        response.path.clear();
+        response.path.reserve(_path.path.size());
+        for(int i = 0; i < _path.path.size(); ++i) {
+            response.path.push_back(_graph.get_node(_path.path[i]));
+        }
     }
     else {
         ROS_ERROR("Requested trait %d is not implemented yet.", request.trait);
