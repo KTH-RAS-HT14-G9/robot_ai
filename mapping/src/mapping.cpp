@@ -82,7 +82,7 @@ void Mapping::markPointsFreeBetween(Point<double> p1, Point<double> p2)
     double dx = max.x-min.x;
     double dy = max.y-min.y;
 
-    if(dx < 0.01) {
+    if(std::abs(dx) < 0.01) {
         min = p1.y <= p2.y ? p1 : p2;
         max = p1.y > p2.y ? p1 : p2;
         double x = min.x;
@@ -306,72 +306,105 @@ void addPointToList(std::vector<Point<int> >& list, int x, int y)
 
 bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigation_msgs::RaycastResponse &response)
 {
-    Eigen::Vector2f origin(request.origin_x, request.origin_y);
-    Eigen::Vector2f dir(request.dir_x, request.dir_y);
+    Eigen::Vector2d origin(request.origin_x, request.origin_y);
+    Eigen::Vector2d dir(request.dir_x, request.dir_y);
     dir.normalize();
     dir *= request.max_length;
 
     Point<double> robot_p1(origin(0), origin(1));
     Point<double> robot_p2(origin(0) + dir(0), origin(1) + dir(1));
 
-    Point<double> p1 = robotToMapTransform(robot_p1);
-    Point<double> p2 = robotToMapTransform(robot_p2);
+    Point<double> p1 = robot_p1;//robotToMapTransform(robot_p1);
+    Point<double> p2 = robot_p2;//robotToMapTransform(robot_p2);
 
-    std::vector<Point<int> > obstacle_points;
+    std::vector<Point<double> > obstacle_points;
 
     //line draw algorithm again to find obstacles
-    Point<double>& min = p1.x <= p2.x ? p1 : p2;
-    Point<double>& max = p1.x > p2.x ? p1 : p2;
+    Point<double> min = p1.x <= p2.x ? p1 : p2;
+    Point<double> max = p1.x  > p2.x ? p1 : p2;
     double dx = max.x-min.x;
     double dy = max.y-min.y;
 
-    if(dx < 0.01) {
+    Point<double> cur;
+
+    if(std::abs(dx) < 0.01) {
         min = p1.y <= p2.y ? p1 : p2;
         max = p1.y > p2.y ? p1 : p2;
         double x = min.x;
-        for(double y = min.y; y < max.y; y +=0.01)
+        for(double y = min.y; y < max.y; y += 0.01)
         {
-            double cell_x = round(x*100.0);
-            double cell_y = round(y*100.0);
-            if (isObstacle(cell_x,cell_y)) {
-                addPointToList(obstacle_points, x, y);
-                if(obstacle_points.size() >= 3)
+            cur.x = x;
+            cur.y = y;
+            Point<int> cell = robotPointToCell(cur);
+
+            if (isObstacle(cell.x,cell.y)) {
+                obstacle_points.push_back(Point<double>(x,y));
+
+                if(obstacle_points.size() >= 2)
                     break;
             }
+
+//            markProbabilityGrid(Point<int>(cell.x,cell.y),P_OCC);
+//            updateOccupancyGrid(cell);
         }
     } else {
         for(double x = min.x; x < max.x; x+=0.01)
         {
             double y = min.y + dy * (x-min.x) / dx;
 
-            double cell_x = round(x*100.0);
-            double cell_y = round(y*100.0);
-            if (isObstacle(cell_x,cell_y)) {
-                addPointToList(obstacle_points, x, y);
-                if(obstacle_points.size() >= 3)
+            cur.x = x;
+            cur.y = y;
+            Point<int> cell = robotPointToCell(cur);
+
+            if (isObstacle(cell.x,cell.y)) {
+                obstacle_points.push_back(Point<double>(x,y));
+
+                if(obstacle_points.size() >= 2)
                     break;
             }
+
+//            markProbabilityGrid(Point<int>(cell.x,cell.y),P_OCC);
+//            updateOccupancyGrid(cell);
         }
     }
 
+    //TODO: distance between 3 hits cannot be greater than x
+
     response.hit = false;
 
-    if (obstacle_points.size() >= 3) {
+    if (obstacle_points.size() >= 2) {
         response.hit = true;
 
-        Eigen::Vector2d hit_p(obstacle_points.begin()->x, obstacle_points.begin()->y);
+        double x_avg = 0;
+        double y_avg = 0;
+        for(int i = 0; i < obstacle_points.size(); ++i)
+        {
+            x_avg += obstacle_points[i].x;
+            y_avg += obstacle_points[i].y;
+        }
+        x_avg /= obstacle_points.size();
+        y_avg /= obstacle_points.size();
 
-        response.hit_dist = (hit_p - Eigen::Vector2d(p1.x, p1.y)).norm();
+        Eigen::Vector2d hit_p(x_avg, y_avg);
+
+        response.hit_dist = (hit_p - origin).norm();
 
         dir.normalize();
-        response.hit_x = origin(0) + dir(0)*response.hit_dist;
-        response.hit_y = origin(1) + dir(1)*response.hit_dist;
+        response.hit_x = hit_p(0);
+        response.hit_y = hit_p(1);
     }
 
-    if (response.hit)
-        markers.add_line(p1.x-MAP_X_OFFSET,p1.y-MAP_Y_OFFSET,p2.x-MAP_X_OFFSET,p2.y-MAP_Y_OFFSET,0.1,0.01,255,0,0);
-    else
-        markers.add_line(p1.x-MAP_X_OFFSET,p1.y-MAP_Y_OFFSET,p2.x-MAP_X_OFFSET,p2.y-MAP_Y_OFFSET,0.1,0.01,0,255,0);
+    Point<double> map_p1 = robotToMapTransform(p1);
+
+    if (response.hit) {
+        Point<double> map_p2 = robotToMapTransform(Point<double>(response.hit_x, response.hit_y));
+        ROS_ERROR("Origin: (%.3lf,%.3lf), Hit: (%.3lf,%.3lf), Dist: %.3lf", p1.x, p1.y, response.hit_x, response.hit_y, response.hit_dist);
+        markers.add_line(map_p1.x-MAP_X_OFFSET,map_p1.y-MAP_Y_OFFSET,map_p2.x-MAP_X_OFFSET,map_p2.y-MAP_Y_OFFSET,0.1,0.01,255,0,0);
+    }
+    else {
+        Point<double> map_p2 = robotToMapTransform(p2);
+        markers.add_line(map_p1.x-MAP_X_OFFSET,map_p1.y-MAP_Y_OFFSET,map_p2.x-MAP_X_OFFSET,map_p2.y-MAP_Y_OFFSET,0.1,0.01,0,255,0);
+    }
 
     pub_viz.publish(markers.get());
     markers.clear();

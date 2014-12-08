@@ -187,7 +187,7 @@ bool request_raycast(double x, double y, double dir_x, double dir_y, double& dis
     request.origin_y = y;
     request.dir_x = dir_x;
     request.dir_y = dir_y;
-    request.max_length = 1.0;
+    request.max_length = 0.8;
 
     response.hit = false;
     _srv_raycast.call(request, response);
@@ -203,7 +203,7 @@ bool request_raycast(double x, double y, double dir_x, double dir_y, double& dis
 bool request_raycast_fl(double ir_dist, double& dist)
 {
     double x = robot::ir::offset_front_left_forward;
-    double y = ir_dist;
+    double y = 0;
 
     double dir_x = 0;
     double dir_y = 1;
@@ -214,7 +214,7 @@ bool request_raycast_fl(double ir_dist, double& dist)
 bool request_raycast_fr(double ir_dist, double& dist)
 {
     double x = robot::ir::offset_front_right_forward;
-    double y = ir_dist;
+    double y = 0;
 
     double dir_x = 0;
     double dir_y = -1;
@@ -224,8 +224,8 @@ bool request_raycast_fr(double ir_dist, double& dist)
 
 bool request_raycast_bl(double ir_dist, double& dist)
 {
-    double x = robot::ir::offset_rear_left_forward;
-    double y = ir_dist;
+    double x = -robot::ir::offset_rear_left_forward;
+    double y = 0;
 
     double dir_x = 0;
     double dir_y = 1;
@@ -235,11 +235,11 @@ bool request_raycast_bl(double ir_dist, double& dist)
 
 bool request_raycast_br(double ir_dist, double& dist)
 {
-    double x = robot::ir::offset_rear_right_forward;
-    double y = ir_dist;
+    double x = -robot::ir::offset_rear_right_forward;
+    double y = 0;
 
     double dir_x = 0;
-    double dir_y = 1;
+    double dir_y = -1;
 
     return request_raycast(x,y, dir_x,dir_y, dist);
 }
