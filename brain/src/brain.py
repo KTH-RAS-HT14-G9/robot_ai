@@ -19,6 +19,7 @@ class MapDirections(IntEnum):
     EAST=1
     SOUTH=2
     WEST=3
+    OBJECT=4
 
 class RobotDirections(IntEnum):
     FORWARD=0
@@ -33,7 +34,7 @@ RECOGNITION_TIME = 2.0
 WAITING_TIME = 0.005
 DIRECTION_BLOCKED = -2
 SIDE_BLOCKED_THRESHOLD = 0.35
-FRONT_BLOCKED_THRESHOLD = 0.25
+FRONT_BLOCKED_THRESHOLD = 0.23
 
 detected_object = Object()
 recognition_clock = 0.0
@@ -306,13 +307,13 @@ def obstacle_behind():
     return not response.fits
 
 def get_direction_to(node):
-    if node.id_north == current_node.id_this:
+    if node.edges[MapDirections.NORTH] == current_node.id_this:
         return MapDirections.SOUTH
-    if node.id_east == current_node.id_this:
+    if node.edges[MapDirections.EAST] == current_node.id_this:
         return MapDirections.WEST
-    if node.id_south == current_node.id_this:
+    if node.edges[MapDirections.SOUTH] == current_node.id_this:
         return MapDirections.NORTH
-    if node.id_west == current_node.id_this:
+    if node.edges[MapDirections.WEST] == current_node.id_this:
         return MapDirections.EAST
     rospy.logerr("Next node is not neighbour to this node. current: %s, goal: %s", str(current_node), str(node))
 
@@ -432,10 +433,10 @@ def reset_motor_controller():
 
 def update_walls_changed():
     global walls_have_changed
-    if not ((current_node.id_north==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.NORTH) and 
-            (current_node.id_east==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.EAST) and
-            (current_node.id_south==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.SOUTH) and 
-            (current_node.id_west==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.WEST)):
+    if not ((current_node.edges[MapDirections.NORTH]==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.NORTH) and 
+            (current_node.edges[MapDirections.EAST] ==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.EAST) and
+            (current_node.edges[MapDirections.SOUTH]==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.SOUTH) and 
+            (current_node.edges[MapDirections.WEST] ==DIRECTION_BLOCKED) == map_dir_blocked(MapDirections.WEST)):
         walls_have_changed = True
 
 def walls_changed():
@@ -580,3 +581,4 @@ def main(argv):
 
 #if __name__ == '__main__':
 main(sys.argv)
+
