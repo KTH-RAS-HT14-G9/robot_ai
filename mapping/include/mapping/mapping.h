@@ -60,6 +60,7 @@ private:
     Point<int> robotPointToCell(Point<double> p);
     Point<double> robotToMapTransform(Point<double> p);
     Point<int> mapPointToCell(Point<double> p);
+    Point<double> transformPointToRobotSystem(std::string& frame_id, double x, double y);
     void markProbabilityGrid(Point<int> cell, double log_prob);
     void updateOccupancyGrid(Point<int>);
     bool isIRValid(double reading);

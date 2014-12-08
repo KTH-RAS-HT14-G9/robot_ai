@@ -304,6 +304,23 @@ void addPointToList(std::vector<Point<int> >& list, int x, int y)
     else list.push_back(Point<int>(x,y));
 }
 
+Point<double> Mapping::transformPointToRobotSystem(std::string& frame_id, double x, double y)
+{
+    if (frame_id.compare("robot")==0)
+        return Point<double>(x,y);
+
+    geometry_msgs::PointStamped stamped_in;
+    stamped_in.header.frame_id = frame_id;
+    stamped_in.point.x = x;
+    stamped_in.point.y = y;
+    stamped_in.point.z = 0;
+
+    geometry_msgs::PointStamped stamped_out;
+    tf_listener.transformPoint("robot",stamped_in,stamped_out);
+
+    return Point<double>(stamped_out.point.x, stamped_out.point.y);
+}
+
 bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigation_msgs::RaycastResponse &response)
 {
     Eigen::Vector2d origin(request.origin_x, request.origin_y);
@@ -311,11 +328,9 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
     dir.normalize();
     dir *= request.max_length;
 
-    Point<double> robot_p1(origin(0), origin(1));
-    Point<double> robot_p2(origin(0) + dir(0), origin(1) + dir(1));
-
-    Point<double> p1 = robot_p1;//robotToMapTransform(robot_p1);
-    Point<double> p2 = robot_p2;//robotToMapTransform(robot_p2);
+    //transform points to robot coordinate system (better would be map system though.)
+    Point<double> p1 = transformPointToRobotSystem(request.frame_id, request.origin_x, request.origin_y);
+    Point<double> p2 = transformPointToRobotSystem(request.frame_id, request.origin_x + dir(0), request.origin_y + dir(1));
 
     std::vector<Point<double> > obstacle_points;
 
@@ -329,7 +344,7 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
 
     if(std::abs(dx) < 0.01) {
         min = p1.y <= p2.y ? p1 : p2;
-        max = p1.y > p2.y ? p1 : p2;
+        max = p1.y  > p2.y ? p1 : p2;
         double x = min.x;
         for(double y = min.y; y < max.y; y += 0.01)
         {
@@ -398,7 +413,6 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
 
     if (response.hit) {
         Point<double> map_p2 = robotToMapTransform(Point<double>(response.hit_x, response.hit_y));
-        ROS_ERROR("Origin: (%.3lf,%.3lf), Hit: (%.3lf,%.3lf), Dist: %.3lf", p1.x, p1.y, response.hit_x, response.hit_y, response.hit_dist);
         markers.add_line(map_p1.x-MAP_X_OFFSET,map_p1.y-MAP_Y_OFFSET,map_p2.x-MAP_X_OFFSET,map_p2.y-MAP_Y_OFFSET,0.1,0.01,255,0,0);
     }
     else {

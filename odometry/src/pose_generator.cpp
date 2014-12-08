@@ -183,6 +183,7 @@ bool request_raycast(double x, double y, double dir_x, double dir_y, double& dis
     navigation_msgs::RaycastRequest request;
     navigation_msgs::RaycastResponse response;
 
+    request.frame_id = "robot";
     request.origin_x = x;
     request.origin_y = y;
     request.dir_x = dir_x;
@@ -345,6 +346,7 @@ void callback_turn_done(const std_msgs::BoolConstPtr& done)
         ROS_INFO("Attempt to correct theta by using ir sensors");
         _correct_theta = true;
     }
+
 }
 
 void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
