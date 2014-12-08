@@ -150,10 +150,11 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
 
         init_path_to_noi(request.id_from, request.trait);
 
-        response.path.clear();
-        response.path.reserve(_path.path.size());
-        for(int i = 0; i < _path.path.size(); ++i) {
-            response.path.push_back(_graph.get_node(_path.path[i]));
+        response.path.path.clear();
+        response.path.path.clear();
+        response.path.path.reserve(_path.path.size());
+        for(int i = 1; i < _path.path.size(); ++i) {
+            response.path.path.push_back(_graph.get_node(_path.path[i]));
         }
     }
     else {

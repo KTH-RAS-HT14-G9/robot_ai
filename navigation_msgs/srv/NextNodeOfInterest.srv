@@ -8,4 +8,4 @@ int32 trait
 
 ---
 
-Node[] path
+Path path
