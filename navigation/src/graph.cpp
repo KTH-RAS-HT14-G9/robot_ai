@@ -158,7 +158,7 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
         response.path.path.clear();
         response.path.path.clear();
         response.path.path.reserve(_path.path.size());
-        for(int i = 1; i < _path.path.size(); ++i) {
+        for(int i = 0; i < _path.path.size(); ++i) {
             response.path.path.push_back(_graph.get_node(_path.path[i]));
         }
     }
