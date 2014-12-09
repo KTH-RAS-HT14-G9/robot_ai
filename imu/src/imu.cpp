@@ -33,8 +33,8 @@ int main(int argc, char **argv)
 	_accel = 0;
 	_temp_acc = 0;
 	ros::NodeHandle handle = ros::NodeHandle("");
-	_pub_imu = handle.advertise<std_msgs::Time>("/imu/peak",10);
-	ros::Subscriber sub_active = handle.subscribe("/imu/active",10,
+	_pub_imu = handle.advertise<std_msgs::Time>("/perception/imu/peak",10);
+	ros::Subscriber sub_active = handle.subscribe("/perception/imu/active",10,
 						&callback_activate);
 	ros::Subscriber sub_imu = handle.subscribe("/imu/data",10,
 						&callback_imu);
