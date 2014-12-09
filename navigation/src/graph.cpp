@@ -9,6 +9,8 @@
 #include <tf/transform_datatypes.h>
 #include <boost/random.hpp>
 #include <boost/random/normal_distribution.hpp>
+#include <algorithm>
+#include <vector>
 
 
 #define NODE_TRAIT_UNKNOWN 0
@@ -18,6 +20,7 @@ geometry_msgs::Point _position;
 Graph _graph;
 boost::shared_ptr<GraphViz> _graph_viz;
 tf::StampedTransform _transform;
+
 
 typedef struct GraphPath_t {
     std::vector<int> path;
@@ -165,6 +168,93 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
     return true;
 }
 
+
+
+int factorial_cal(int n)
+{
+ int fact=1;
+ for (int i=n;i<n;--i)
+ {
+    fact=fact*i;
+ }
+ return fact;
+}
+
+void get_object_node_indexs(std::vector<int> &object_nodes)
+{
+    object_nodes.reserve(_graph.num_nodes());
+
+    for (int i=0; i< _graph.num_nodes();++i)
+    {
+        if (_graph.get_node(i).object_here)
+        {
+           object_nodes.push_back(_graph.get_node(i).id_this);
+        }
+    }
+}
+
+void generate_all_permutations(const std::vector<int>& object_nodes,std::vector<std::vector <int> >& perm)
+{
+    int i=0;
+
+    do {
+        perm[i][0]=_graph.get_node(0).id_this; // add start node
+        for (int j=1;j<object_nodes.size();++j)
+        {
+            perm[i][j]=object_nodes[j];
+        }
+        i=i+1;
+      } while ( std::next_permutation(object_nodes.begin(),object_nodes.end() ));
+}
+std::vector<int> find_shortest_path()
+{
+
+    std::vector<int> object_nodes;
+    std::vector<int> best_path;
+    get_object_node_indexs(object_nodes);
+    int perm_num=factorial_cal(object_nodes.size());
+    if (object_nodes.size()==0) {return std::vector<int>();}
+
+    std::vector<std::vector <int> > perm;
+    perm.reserve(perm_num);
+    best_path.reserve(object_nodes.size()+1);
+    for (int i=0;i<perm_num;++i)
+    {
+        perm[i].resize(object_nodes.size()+1); //+1 for starting node
+    }
+
+    generate_all_permutations(object_nodes,perm);
+    int shortest=100000;
+    int best_id =-1;
+    int dist=0;
+    // do iterations for all permutations
+    for (int i=0; i<perm_num;++i)
+    {
+     int dist_sum=0;
+     for (int j=0; j<object_nodes.size()-1;++j)
+       {
+         _graph.path_to_node(perm[i][j], perm[i][j+1], _path.path,dist);
+        dist_sum=dist_sum+dist;
+       }
+      _graph.path_to_node(perm[i][object_nodes.size()-1], perm[i][0], _path.path,dist); // for the last object to the strating point
+      dist_sum=dist_sum+dist;
+      if (dist_sum<shortest)
+      {
+          best_id=i;
+          shortest=dist_sum;
+      }
+    }
+    if (best_id== -1)
+    {
+        std::cout<<"china"<<std::endl;
+        return std::vector<int>();
+     }
+    for (int i=0; i<object_nodes.size()+1;++i)
+    {
+        best_path(i)=perm[best_id][i];
+    }
+
+}
 void test_request(int id_prev, int dir, bool blocked_n, bool blocked_e, bool blocked_s, bool blocked_w, navigation_msgs::PlaceNodeRequest& request)
 {
     request.id_previous = id_prev;
@@ -368,6 +458,7 @@ int main(int argc, char **argv)
     ros::ServiceServer srv_next_noi = n.advertiseService("/navigation/graph/next_node_of_interest",service_next_noi);
 
     navigation_msgs::Node node;
+
 
     _graph_viz = boost::shared_ptr<GraphViz>(new GraphViz(_graph, n));
 
