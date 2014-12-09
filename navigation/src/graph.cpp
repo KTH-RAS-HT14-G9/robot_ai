@@ -187,6 +187,7 @@ void get_object_node_indexs(std::vector<int> &object_nodes)
 {
     object_nodes.reserve(_graph.num_nodes());
 
+
     for (int i=0; i< _graph.num_nodes();++i)
     {
         if (_graph.get_node(i).object_here)
@@ -194,6 +195,7 @@ void get_object_node_indexs(std::vector<int> &object_nodes)
            object_nodes.push_back(_graph.get_node(i).id_this);
         }
     }
+   // std::cout<<object_nodes.size()<<std::endl;
 }
 
 void generate_all_permutations( std::vector<int>& object_nodes,std::vector<std::vector <int> >& perm)
@@ -205,7 +207,6 @@ void generate_all_permutations( std::vector<int>& object_nodes,std::vector<std::
         {
             perm[i][j+1]=object_nodes[j];
         }
-        //std::cout << perm[i][0] << ' ' << perm[i][1] << ' ' << perm[i][2] << std::endl;
         i=i+1;
       } while ( std::next_permutation(object_nodes.begin(),object_nodes.end() ));
 }
@@ -221,7 +222,7 @@ std::vector<int> find_shortest_path()
 
     std::vector<std::vector <int> > perm;
     perm.resize(perm_num);
-    best_path.reserve(object_nodes.size()+1);
+    best_path.reserve(object_nodes.size()+2);
     for (int i=0;i<perm_num;++i)
     {
         perm[i].resize(object_nodes.size()+1); //+1 for starting node
@@ -235,13 +236,17 @@ std::vector<int> find_shortest_path()
     for (int i=0; i<perm_num;++i)
     {
      double dist_sum=0;
-     for (int j=0; j<object_nodes.size()-1;++j)
+     for (int j=0; j<object_nodes.size();++j)
        {
          _graph.path_to_node(perm[i][j], perm[i][j+1], _path.path,dist);
+         std::cout<<"from "<<perm[i][j]<<"to "<<perm[i][j+1]<<" dist"<<dist<<std::endl;
         dist_sum=dist_sum+dist;
        }
+
       _graph.path_to_node(perm[i][object_nodes.size()-1], perm[i][0], _path.path,dist); // for the last object to the strating point
+      std::cout<<"going back dis  "<<dist<< std::endl;
       dist_sum=dist_sum+dist;
+      std::cout<<dist_sum<<std::endl;
       if (dist_sum<shortest)
       {
           best_id=i;
@@ -258,6 +263,8 @@ std::vector<int> find_shortest_path()
 
         best_path.push_back(perm[best_id][i]);
     }
+        best_path.push_back(_graph.get_node(0).id_this);
+    return best_path;
 
 }
 void test_request(int id_prev, int dir, bool blocked_n, bool blocked_e, bool blocked_s, bool blocked_w, navigation_msgs::PlaceNodeRequest& request)
@@ -305,17 +312,19 @@ void test2_graph_build(std::vector<Point>& points) {
 
     Point p0(0,0);
     Point p1(2,0);
+    Point pObject1(2,0.5); pObject1.dir = navigation_msgs::Node::OBJECT;
     Point p2(2,1);
     Point p3(2,-1);
-    Point pObject(2,-1.5); pObject.dir = navigation_msgs::Node::SOUTH;
+    Point pObject2(2,-1.5); pObject2.dir = navigation_msgs::Node::OBJECT;
 
     linspace(points, p0, p1, navigation_msgs::Node::EAST, 5);
     p1 = points[points.size()-1];
+    points.push_back(pObject1);
     linspace(points, p1, p2, navigation_msgs::Node::NORTH, 5);
     p2 = points[points.size()-1];
     linspace(points, p2, p3, navigation_msgs::Node::SOUTH, 5);
     p3 = points[points.size()-1];
-    points.push_back(pObject);
+    points.push_back(pObject2);
 
     _test2_previous_node.id_this = -1;
 }
@@ -362,7 +371,7 @@ void test2_graph(const std::vector<Point>& points)
     request.south_blocked = true;
     request.id_previous =  _test2_previous_node.id_this;
 
-    if (_test2_i == points.size()-1)
+    if (points[_test2_i].dir == navigation_msgs::Node::OBJECT)
     {
         request.direction = points[_test2_i-1].dir;
 
@@ -467,27 +476,10 @@ int main(int argc, char **argv)
     _graph_viz = boost::shared_ptr<GraphViz>(new GraphViz(_graph, n));
 
     ros::Rate rate(10.0);
-
-//    std::vector<Point> test_points;
-//    test2_graph_build(test_points);
-
-    //test
-    /*
-    std::vector<int> object_nodes ;
-    object_nodes.reserve(3);
-    for (int i=0;i<3;++i)
-    {object_nodes.push_back(i);
-    }
-    int perm_num=factorial_cal(object_nodes.size());
-    std::vector<std::vector <int> > perm;
-    perm.resize(perm_num);
-
-    for (int i=0;i<perm_num;++i)
-    {
-        perm[i].resize(object_nodes.size()+1); //+1 for starting node
-    }
-    generate_all_permutations( object_nodes,perm);
-    */
+   ///////test
+  //  std::vector<Point> test_points;
+  //  test2_graph_build(test_points);
+  //  std::vector<int> best_path;
 
 
     while(n.ok())
@@ -503,6 +495,14 @@ int main(int argc, char **argv)
         }
 
         _graph_viz->draw();
+
+        //if (_test2_i >= test_points.size()) {
+        //best_path=find_shortest_path();
+            // for (int i=0; i<best_path.size();++i){
+             //  std::cout<<best_path[i]<< "->"<<std::endl;
+           //  }
+
+        //}
 
         ros::spinOnce();
         rate.sleep();
