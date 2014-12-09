@@ -16,20 +16,17 @@ from nav_msgs.msg import Odometry
 import direction_handler
 import obstacle_handler
 
-class Point:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
+OBJECT_DETECTION_MUTE_TIME = 10.0
 RECOGNITION_TIME = 2.0
 WAITING_TIME = 0.005
 
-recognition_clock = 0.0
+object_recognized_time = 0.0
+recognition_done_time = 0.0
+
 detected_object = Object()
 odometry = Odometry()
 distance = Distance()
 current_node = Node()
-detected_object_pos = Point()
 
 compass_direction = Node.EAST
 
@@ -48,8 +45,6 @@ following_wall = False
 going_forward = False
 walls_have_changed = True
 node_detected = False
-
-# TODO - what happens when there are no objects to follow in graph? How distinguish visited from unvisited objects?
 
 class Explore(smach.State):
     def __init__(self):
@@ -104,9 +99,11 @@ class ObjectDetected(smach.State):
         smach.State.__init__(self, outcomes=['explore'])
 
     def execute(self, userdata):
-        if detected_object.type == -1:
+        global recognition_done_time
+        if detected_object.type == Object.TYPE_UNKNOWN:
+            time = rospy.get_time()
 
-            rospy.loginfo("Unknown object seen, recognizing...")
+            rospy.loginfo("Unknown object detected, recognizing...")
 
             go_forward(False)
             follow_wall(False)
@@ -114,25 +111,24 @@ class ObjectDetected(smach.State):
             object_angle=math.atan2(detected_object.y,detected_object.x)
             object_angle=180*(object_angle/math.pi)
 
-            has_turned = False
-            if (math.fabs(object_angle)>10):
+            if math.fabs(object_angle) > 10.0:
                turn(object_angle)
-               has_turned = True
             
             rospy.sleep(RECOGNITION_TIME)
 
-            if detected_object.type == -1 and (rospy.get_time() - recognition_clock) > 5.0:
-                rospy.loginfo("Reognition failed")
-            else: rospy.loginfo("Reognition successful")
-            
-            if has_turned:
+            if math.fabs(object_angle) > 10.0:
                 turn(-object_angle)
 
-        if detected_object.type != -1:
-            place_node(True)
+            if rospy.get_time() - object_recognized_time <= RECOGNITION_TIME:
+                rospy.loginfo("Reognition successful")
+                place_node(True)
+            else: 
+                rospy.loginfo("Reognition failed")
+
+        recognition_done_time = rospy.get_time()
+        reset_node_detected()
 
         rospy.loginfo("OBJECT_DETECTED ==> EXPLORE")
-        reset_node_detected()
         return 'explore'
 
 class FollowGraph(smach.State):
@@ -155,8 +151,8 @@ class FollowGraph(smach.State):
 
         return 'follow_graph'
 
-def get_next_noi(mode):
-    return next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, mode)).target_node
+def get_next_noi(trait):
+    return next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, trait)).target_node
 
 def place_node(object_here):
     global current_node, walls_have_changed
@@ -248,31 +244,16 @@ def ir_callback(data):
     distance = data
 
 def object_detected_callback(new_object):
-    global detected_object, object_detected, detected_object_pos, recognition_clock
-    new_object_pos = robot_to_map_pos(new_object.x, new_object.y)
-    if distance_between(new_object_pos, detected_object_pos) > 0.2 or (new_object.type != -1 and new_object.type != object_detected.type):
-        rospy.loginfo("New Object detected X=%f, Y=%f, TYPE=%d.", new_object.x, new_object.y, new_object.type)
+    global detected_object, object_detected, object_recognized_time
+    if rospy.get_time() - recognition_done_time > OBJECT_DETECTION_MUTE_TIME:
+        rospy.loginfo("New object detected X=%f, Y=%f, TYPE=%d.", new_object.x, new_object.y, new_object.type)
         detected_object = new_object
-        detected_object_pos = new_object_pos
         object_detected = True
 
-        if new_object.type != -1:
-            recognition_clock = rospy.get_time()
+        if new_object.type != Object.TYPE_UNKNOWN:
+            object_recognized_time = rospy.get_time()
     else: 
-        rospy.loginfo("Familiar object detected X=%f, Y=%f, TYPE=%d.", new_object.x, new_object.y, new_object.type)
-    
-def robot_to_map_pos(x, y):
-    if compass_direction == Node.EAST:
-        return Point(odometry.x + x, odometry.y + y)
-    if compass_direction == Node.NORTH:
-        return Point(odometry.x - y, odometry.y + x)
-    if compass_direction == Node.WEST:
-        return Point(odometry.x - x, odometry.y - y)
-    if compass_direction == Node.SOUTH:
-        return Point(odometry.x + y, odometry.y - x)
-
-def distance_between(p1, p2):
-    return math.sqrt(math.pow(p1.x-p2.x,2)+math.pow(p1.y-p2.y,2))
+        rospy.loginfo("New object detected, but it was ignored. X=%f, Y=%f, TYPE=%d.", new_object.x, new_object.y, new_object.type)
 
 def on_node_callback(node):
     global current_node, node_detected
