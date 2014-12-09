@@ -208,10 +208,9 @@ def go_forward(should_go):
 
 def update_walls_changed(): 
     global walls_have_changed
-    if not ((current_node.edges[Node.NORTH]==Node.BLOCKED) == map_dir_blocked(Node.NORTH) and 
-            (current_node.edges[Node.EAST] ==Node.BLOCKED) == map_dir_blocked(Node.EAST) and
-            (current_node.edges[Node.SOUTH]==Node.BLOCKED) == map_dir_blocked(Node.SOUTH) and 
-            (current_node.edges[Node.WEST] ==Node.BLOCKED) == map_dir_blocked(Node.WEST)):
+    if not ((current_node.edges[robot_to_map_dir(RobotDirections.LEFT)]==Node.BLOCKED) == robot_dir_blocked(RobotDirections.LEFT) and 
+            (current_node.edges[robot_to_map_dir(RobotDirections.RIGHT)]==Node.BLOCKED) == robot_dir_blocked(RobotDirections.RIGHT) and
+            (current_node.edges[robot_to_map_dir(RobotDirections.FORWARD)]==Node.BLOCKED) == robot_dir_blocked(RobotDirections.FORWARD)):
         walls_have_changed = True
 
 def walls_changed():
