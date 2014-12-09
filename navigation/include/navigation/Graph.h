@@ -37,7 +37,7 @@ public:
 
     void path_to_next_unknown(int id_from, std::vector<int>& path);
     void path_to_next_object(int id_from, std::vector<int>& path);
-    void path_to_node(int id_from, int id_to, std::vector<int>& path);
+    void path_to_node(int id_from, int id_to, std::vector<int>& path, double& dist);
 
     int get_closest_node(float x, float y, bool consider_obj, double& min_dist);
 
@@ -63,7 +63,7 @@ protected:
 
     void update_position(float& x, float& y, float new_x, float new_y);
 
-    void path_to_poi(int id_from, const std::vector<bool>& filter, std::vector<int>& path);
+    void path_to_poi(int id_from, const std::vector<bool>& filter, std::vector<int>& path, double& dist);
 
     inline int invert_direction(int dir) {
         if (dir == Object) return dir;
@@ -369,7 +369,8 @@ void Graph::path_to_next_unknown(int id_from, std::vector<int>& path)
         has_unkown[i] = has_unkown_directions(i);
     }
 
-    path_to_poi(id_from, has_unkown, path);
+    double dummy;
+    path_to_poi(id_from, has_unkown, path, dummy);
 }
 
 void Graph::path_to_next_object(int id_from, std::vector<int> &path)
@@ -381,20 +382,21 @@ void Graph::path_to_next_object(int id_from, std::vector<int> &path)
         is_object[i] = it->object_here;
     }
 
-    path_to_poi(id_from, is_object, path);
+    double dummy;
+    path_to_poi(id_from, is_object, path, dummy);
 }
 
-void Graph::path_to_node(int id_from, int id_to, std::vector<int> &path)
+void Graph::path_to_node(int id_from, int id_to, std::vector<int> &path, double& dist)
 {
     std::vector<bool> is_target_node;
     is_target_node.resize(_nodes.size());
     is_target_node[id_to] = true;
 
-    path_to_poi(id_from, is_target_node, path);
+    path_to_poi(id_from, is_target_node, path, dist);
 }
 
 
-void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vector<int> &path)
+void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vector<int> &path, double &dist)
 {
     if (_nodes.size() == 0)
         return;
@@ -445,6 +447,8 @@ void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vecto
             i_min_dist = i;
         }
     }
+
+    dist = min_dist;
 
     //determine shortest path
     int cur = i_min_dist;
