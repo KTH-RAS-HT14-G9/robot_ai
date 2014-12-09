@@ -19,7 +19,7 @@ def robot_dir_blocked(robot_dir):
         return not can_turn_right()
     if robot_dir == RobotDirections.FORWARD:
         return obstacle_ahead()
-    if robot_dir == RobotDirections.BACKWARDS:
+    if robot_dir == RobotDirections.BACKWARD:
         return obstacle_behind()
 
 def north_blocked():
