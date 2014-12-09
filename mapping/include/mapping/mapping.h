@@ -53,14 +53,18 @@ public:
     void updateTransform();
 
 private:
-    void markPointsFreeBetween(Point<double> p1, Point<double> p2);
+    //void markPointsBetween(Point<double> p1, Point<double> p2, double val);
+    void markPointsBetween(Point<int> p0, Point<int> p1, double val);
     void updateIR(double ir_reading, double ir_x_offset);
-    void markPointOccupied(Point<double> p);
-    void markPointFree(Point<double> p);
+    //void markPointOccupied(Point<double> p);
+    void markCellOccupied(Point<int> cell, int neighborhood = 1);
+    void markPoint(Point<double> p, double val);
     Point<int> robotPointToCell(Point<double> p);
     Point<double> robotToMapTransform(Point<double> p);
     Point<int> mapPointToCell(Point<double> p);
     Point<double> transformPointToRobotSystem(std::string& frame_id, double x, double y);
+    Point<int> transformPointToGridSystem(std::string& frame_id, double x, double y);
+    Point<double> transformCellToMap(Point<int>& cell);
     void markProbabilityGrid(Point<int> cell, double log_prob);
     void updateOccupancyGrid(Point<int>);
     bool isIRValid(double reading);
