@@ -16,6 +16,11 @@ from nav_msgs.msg import Odometry
 import direction_handler
 import obstacle_handler
 
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
 RECOGNITION_TIME = 2.0
 WAITING_TIME = 0.005
 
@@ -24,6 +29,7 @@ detected_object = Object()
 odometry = Odometry()
 distance = Distance()
 current_node = Node()
+detected_object_pos = Point()
 
 compass_direction = Node.EAST
 
@@ -242,11 +248,12 @@ def ir_callback(data):
     distance = data
 
 def object_detected_callback(new_object):
-    global detected_object, object_detected, recognition_clock
-    #local coordinates, do in global
-    if distance_between(new_object, detected_object) > 0.2 or (new_object.type != -1 and new_object.type != object_detected.type):
+    global detected_object, object_detected, detected_object_pos, recognition_clock
+    new_object_pos = robot_to_map_pos(new_object.x, new_object.y)
+    if distance_between(new_object_pos, detected_object_pos) > 0.2 or (new_object.type != -1 and new_object.type != object_detected.type):
         rospy.loginfo("New Object detected X=%f, Y=%f, TYPE=%d.", new_object.x, new_object.y, new_object.type)
         detected_object = new_object
+        detected_object_pos = new_object_pos
         object_detected = True
 
         if new_object.type != -1:
@@ -254,9 +261,18 @@ def object_detected_callback(new_object):
     else: 
         rospy.loginfo("Familiar object detected X=%f, Y=%f, TYPE=%d.", new_object.x, new_object.y, new_object.type)
     
+def robot_to_map_pos(x, y):
+    if compass_direction == Node.EAST:
+        return Point(odometry.x + x, odometry.y + y)
+    if compass_direction == Node.NORTH:
+        return Point(odometry.x - y, odometry.y + x)
+    if compass_direction == Node.WEST:
+        return Point(odometry.x - x, odometry.y - y)
+    if compass_direction == Node.SOUTH:
+        return Point(odometry.x + y, odometry.y - x)
 
-def distance_between(object1, object2):
-    return math.sqrt(math.pow(object1.x-object2.x,2)+math.pow(object1.y-object2.y,2))
+def distance_between(p1, p2):
+    return math.sqrt(math.pow(p1.x-p2.x,2)+math.pow(p1.y-p2.y,2))
 
 def on_node_callback(node):
     global current_node, node_detected
