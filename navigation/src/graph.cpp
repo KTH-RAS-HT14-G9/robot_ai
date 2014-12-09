@@ -11,6 +11,7 @@
 #include <boost/random/normal_distribution.hpp>
 #include <algorithm>
 #include <vector>
+#include <iostream>
 
 
 #define NODE_TRAIT_UNKNOWN 0
@@ -116,7 +117,8 @@ void init_path_to_noi(int id_from, int trait) {
     else if (trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_START)
     {
         ROS_INFO("Finding shortest path to start node...");
-        _graph.path_to_node(id_from, 0, _path.path);
+        double dummy;
+        _graph.path_to_node(id_from, 0, _path.path,dummy);
     }
     else
         ROS_ERROR("Requested trait %d is not implemented yet.", trait);
@@ -168,8 +170,9 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
 
 int factorial_cal(int n)
 {
+ if (n==0) return 1;
  int fact=1;
- for (int i=n;i<n;--i)
+ for (int i=1;i<=n;++i)
  {
     fact=fact*i;
  }
@@ -189,19 +192,20 @@ void get_object_node_indexs(std::vector<int> &object_nodes)
     }
 }
 
-void generate_all_permutations(const std::vector<int>& object_nodes,std::vector<std::vector <int> >& perm)
+void generate_all_permutations( std::vector<int>& object_nodes,std::vector<std::vector <int> >& perm)
 {
     int i=0;
-
     do {
         perm[i][0]=_graph.get_node(0).id_this; // add start node
-        for (int j=1;j<object_nodes.size();++j)
+        for (int j=0;j<object_nodes.size();++j)
         {
-            perm[i][j]=object_nodes[j];
+            perm[i][j+1]=object_nodes[j];
         }
+        //std::cout << perm[i][0] << ' ' << perm[i][1] << ' ' << perm[i][2] << std::endl;
         i=i+1;
       } while ( std::next_permutation(object_nodes.begin(),object_nodes.end() ));
 }
+
 std::vector<int> find_shortest_path()
 {
 
@@ -212,7 +216,7 @@ std::vector<int> find_shortest_path()
     if (object_nodes.size()==0) {return std::vector<int>();}
 
     std::vector<std::vector <int> > perm;
-    perm.reserve(perm_num);
+    perm.resize(perm_num);
     best_path.reserve(object_nodes.size()+1);
     for (int i=0;i<perm_num;++i)
     {
@@ -220,13 +224,13 @@ std::vector<int> find_shortest_path()
     }
 
     generate_all_permutations(object_nodes,perm);
-    int shortest=100000;
+    double shortest=std::numeric_limits<double>::infinity();
     int best_id =-1;
-    int dist=0;
+    double dist=0;
     // do iterations for all permutations
     for (int i=0; i<perm_num;++i)
     {
-     int dist_sum=0;
+     double dist_sum=0;
      for (int j=0; j<object_nodes.size()-1;++j)
        {
          _graph.path_to_node(perm[i][j], perm[i][j+1], _path.path,dist);
@@ -247,7 +251,8 @@ std::vector<int> find_shortest_path()
      }
     for (int i=0; i<object_nodes.size()+1;++i)
     {
-        best_path(i)=perm[best_id][i];
+
+        best_path.push_back(perm[best_id][i]);
     }
 
 }
@@ -455,13 +460,31 @@ int main(int argc, char **argv)
 
     navigation_msgs::Node node;
 
-
     _graph_viz = boost::shared_ptr<GraphViz>(new GraphViz(_graph, n));
 
     ros::Rate rate(10.0);
 
     std::vector<Point> test_points;
     test2_graph_build(test_points);
+
+    //test
+    /*
+    std::vector<int> object_nodes ;
+    object_nodes.reserve(3);
+    for (int i=0;i<3;++i)
+    {object_nodes.push_back(i);
+    }
+    int perm_num=factorial_cal(object_nodes.size());
+    std::vector<std::vector <int> > perm;
+    perm.resize(perm_num);
+
+    for (int i=0;i<perm_num;++i)
+    {
+        perm[i].resize(object_nodes.size()+1); //+1 for starting node
+    }
+    generate_all_permutations( object_nodes,perm);
+    */
+
 
     while(n.ok())
     {
