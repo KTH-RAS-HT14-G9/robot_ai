@@ -4,7 +4,7 @@ from navigation_msgs.msg import Node
 class RobotDirections(IntEnum):
     FORWARD=0
     RIGHT=1
-    BACKWARDS=2
+    BACKWARD=2
     LEFT=3 
 
 def robot_to_map_dir(robot_dir):
