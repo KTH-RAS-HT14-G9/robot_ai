@@ -7,6 +7,7 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float64.h>
 #include <std_msgs/Int8.h>
+#include <std_msgs/Time.h>
 #include <ir_converter/Distance.h>
 #include <common/parameter.h>
 #include <navigation_msgs/Raycast.h>
@@ -19,6 +20,11 @@
 // Members
 
 Parameter<int> _max_iterations("/pose/odometry/num_correction_iterations",5);
+Parameter<bool> _enable_lateral_correction("/pose/odometry/correction/lateral_enabled",false);
+Parameter<bool> _enable_theta_correction("/pose/odometry/correction/theta_enabled",true);
+
+ros::NodeHandlePtr _handle;
+ros::Timer _timer;
 
 double _x,_y,_theta;
 tf::Quaternion _q;
@@ -27,7 +33,7 @@ nav_msgs::Odometry _odom;
 //ir_converter::Distance _ir_dist;
 Eigen::Matrix<double,4,1> _ir_dist;
 bool _correct_theta, _correct_lateral;
-int _iteration;
+int _iteration_theta, _iteration_lateral;
 double _turn_accum;
 int _heading;
 
@@ -38,6 +44,12 @@ ros::Publisher _pub_odom;
 ros::Publisher _pub_viz;
 ros::Publisher _pub_compass;
 ros::ServiceClient _srv_raycast;
+
+std::vector<ras_arduino_msgs::Encoders> _ringbuffer;
+int _ringbuffer_max_size = 50*2;
+
+bool _mute = false;
+double _muting_time = 1.0;
 
 //------------------------------------------------------------------------------
 // Methods
@@ -62,6 +74,53 @@ void pack_pose(tf::Quaternion& q, nav_msgs::Odometry& odom)
 
 //------------------------------------------------------------------------------
 // Callbacks
+
+void callback_timer(const ros::TimerEvent& event)
+{
+    _mute = false;
+    ROS_ERROR("[PoseGenerator::callback_timer] Enabling encoder readings");
+}
+
+void revert_applied_readings_since(const ros::Time& time)
+{
+    int msec = (int)(time.toNSec()/1000l);
+
+    int k = 0;
+
+    for(std::vector<ras_arduino_msgs::Encoders>::reverse_iterator it = _ringbuffer.rbegin(); it != _ringbuffer.rend(); ++it)
+    {
+        ras_arduino_msgs::Encoders& enc = *it;
+        if (enc.timestamp >= msec)
+        {
+            ++k;
+
+            double dist_l = (2.0*M_PI*robot::dim::wheel_radius) * (enc.delta_encoder1 / robot::prop::ticks_per_rev);
+            double dist_r = (2.0*M_PI*robot::dim::wheel_radius) * (enc.delta_encoder2 / robot::prop::ticks_per_rev);
+
+            _theta += (dist_r - dist_l) / robot::dim::wheel_distance;
+
+            double dist = (dist_r + dist_l) / 2.0;
+
+            _x += dist * cos(_theta);
+            _y += dist * sin(_theta);
+
+            //remove reading
+            _ringbuffer.erase(--it.base());
+        }
+    }
+
+    ROS_ERROR("[PoseGenerator::revertReadingsSince] Reverted %d readings.",k);
+}
+
+void callback_crash(const std_msgs::TimeConstPtr& time)
+{
+    _mute = true;
+
+    revert_applied_readings_since(time->data);
+    _timer = _handle->createTimer(ros::Duration(_muting_time), callback_timer, true, true );
+
+    ROS_ERROR("[PoseGenerator::callbackCrash] Crash signal received. Will mute encoder readings for %.2lf seconds", _muting_time);
+}
 
 void send_marker(tf::Transform& transform) {
     visualization_msgs::Marker _robot_marker;
@@ -89,6 +148,15 @@ void send_marker(tf::Transform& transform) {
     _pub_viz.publish(_robot_marker);
 }
 
+void ringbuffer_push(const ras_arduino_msgs::Encoders& encoders)
+{
+    if (_ringbuffer.size() >= _ringbuffer_max_size)
+    {
+        _ringbuffer.erase(_ringbuffer.begin());
+    }
+    _ringbuffer.push_back(encoders);
+}
+
 /**
   * Adapter from http://simreal.com/content/Odometry
   */
@@ -96,18 +164,25 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
 {
     static tf::TransformBroadcaster pub_tf;
 
-    double c_l = 1.0;//0.98416;
-    double c_r = 1.0;//1.0538;
+    if (!_mute) {
 
-    double dist_l = c_l * (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder1 / robot::prop::ticks_per_rev);
-    double dist_r = c_r * (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder2 / robot::prop::ticks_per_rev);
+        double c_l = 1.0;//0.98416;
+        double c_r = 1.0;//1.0538;
 
-    _theta += (dist_r - dist_l) / robot::dim::wheel_distance;
+        double dist_l = c_l * (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder1 / robot::prop::ticks_per_rev);
+        double dist_r = c_r * (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder2 / robot::prop::ticks_per_rev);
 
-    double dist = (dist_r + dist_l) / 2.0;
+        _theta += (dist_r - dist_l) / robot::dim::wheel_distance;
 
-    _x += dist * cos(_theta);
-    _y += dist * sin(_theta);
+        double dist = (dist_r + dist_l) / 2.0;
+
+        _x += dist * cos(_theta);
+        _y += dist * sin(_theta);
+
+        ras_arduino_msgs::Encoders fixed = *encoders;
+        fixed.timestamp = (int)(ros::Time::now().toNSec()/1000l);
+        ringbuffer_push(fixed);
+    }
 
     pack_pose(_q, _odom);
     _pub_odom.publish(_odom);
@@ -301,11 +376,11 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
     if (_correct_theta)
     {
         _ir_dist += pack_matrix(distances);
-        ++_iteration;
+        ++_iteration_theta;
 
-        if (_iteration >= _max_iterations()) {
+        if (_iteration_theta >= _max_iterations()) {
 
-            _ir_dist /= _iteration;
+            _ir_dist /= _iteration_theta;
 
             double dx = robot::ir::offset_front_left_forward + robot::ir::offset_rear_left_forward;
             double dy = get_dy(_ir_dist);
@@ -320,10 +395,8 @@ void callback_ir(const ir_converter::DistanceConstPtr& distances)
             ROS_INFO("corrected theta %.3lf -> %.3lf", RAD2DEG(_theta), RAD2DEG(new_theta));
             _theta = new_theta;
 
-            _correct_lateral = true;
-
             _correct_theta = false;
-            _iteration = 0;
+            _iteration_theta = 0;
         }
     }
     else
@@ -344,7 +417,8 @@ void callback_turn_done(const std_msgs::BoolConstPtr& done)
 
     if (RAD2DEG(std::abs(angle)) < 10.0 && std::abs(_turn_accum) < 20.0) {
         ROS_INFO("Attempt to correct theta by using ir sensors");
-        _correct_theta = true;
+        _correct_theta = _enable_theta_correction();
+        _correct_lateral = _enable_lateral_correction();
     }
 
 }
@@ -376,8 +450,16 @@ void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
     _pub_compass.publish(msg);
 }
 
+double _avg_plane_dist;
+int _accumulated_plane_dists;
 void callback_planes(const vision_msgs::PlanesConstPtr& planes)
 {
+    if (!_correct_lateral) {
+        _avg_plane_dist = 0;
+        _accumulated_plane_dists = 0;
+        return;
+    }
+
     //find wall that is perpendicular to the robots direction
     double max_dot = 0.0;
     int ortho_plane = 0;
@@ -402,27 +484,42 @@ void callback_planes(const vision_msgs::PlanesConstPtr& planes)
         _front_plane = planes->planes[ortho_plane];
         _see_front_plane = true;
 
-        if (_correct_lateral)
-        {
-            ROS_ERROR("Attempt to correct position based on wall");
+        _iteration_lateral++;
 
-            _correct_lateral = false;
+        double x_diff = get_x_diff();
+        ROS_ERROR("x diff = %.3lf",x_diff);
 
-            double x_diff = get_x_diff();
-            ROS_ERROR("x diff = %.3lf",x_diff);
+        if (!std::isnan(x_diff)) {
+            _avg_plane_dist += x_diff;
+            _accumulated_plane_dists++;
+        }
 
-            if (std::abs(x_diff) < 0.1) {
-                double dx = cos(_theta);
-                double dy = sin(_theta);
+        if (_iteration_lateral >= _max_iterations()) {
 
-                double new_x = _x + x_diff*dx;
-                double new_y = _y + x_diff*dy;
+            if (_accumulated_plane_dists > 0) {
 
-                ROS_ERROR("corrected position (%.3lf,%.3lf) -> (%.3lf,%.3lf)", _x, _y, new_x, new_y);
+                double avg_diff = _avg_plane_dist / (double)_accumulated_plane_dists;
 
-                _x = new_x;
-                _y = new_y;
+                ROS_ERROR("Attempt to correct position based on wall");
+
+                if (std::abs(avg_diff) < 0.1) {
+                    double dx = cos(_theta);
+                    double dy = sin(_theta);
+
+                    double new_x = _x + avg_diff*dx;
+                    double new_y = _y + avg_diff*dy;
+
+                    ROS_ERROR("corrected position (%.3lf,%.3lf) -> (%.3lf,%.3lf)", _x, _y, new_x, new_y);
+
+                    _x = new_x;
+                    _y = new_y;
+                }
             }
+
+            _iteration_lateral = 0;
+            _avg_plane_dist = 0;
+            _accumulated_plane_dists = 0;
+            _correct_lateral = false;
         }
     }
     else {
@@ -439,30 +536,33 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "pose_generator");
 
-    ros::NodeHandle n;
+    _handle = ros::NodeHandlePtr(new ros::NodeHandle(""));
 
     _odom.header.frame_id = "map";
     _x = _y = 0;
     _theta = 0;
     _correct_theta = false;
     _correct_lateral = false;
-    _iteration = 0;
+    _iteration_theta = 0; _iteration_lateral = 0;
     _turn_accum = 0;
     _heading = 0;
 
     _see_front_plane = false;
 
-    ros::Subscriber sub_enc = n.subscribe("/arduino/encoders",10,callback_encoders);
-    ros::Subscriber sub_turn_angle = n.subscribe("/controller/turn/angle",10,callback_turn_angle);
-    ros::Subscriber sub_turn_done = n.subscribe("/controller/turn/done",10,callback_turn_done);
-    ros::Subscriber sub_ir = n.subscribe("/perception/ir/distance",10,callback_ir);
-    ros::Subscriber sub_planes = n.subscribe("/vision/obstacles/planes",10,callback_planes);
+    _ringbuffer.reserve(_ringbuffer_max_size);
 
-    _pub_odom = n.advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_odometry_callback);
-    _pub_viz = n.advertise<visualization_msgs::Marker>( "visualization_marker", 0 );
-    _pub_compass = n.advertise<std_msgs::Int8>("/pose/compass", 10, (ros::SubscriberStatusCallback)connect_compass_callback);
+    ros::Subscriber sub_enc = _handle->subscribe("/arduino/encoders",10,callback_encoders);
+    ros::Subscriber sub_turn_angle = _handle->subscribe("/controller/turn/angle",10,callback_turn_angle);
+    ros::Subscriber sub_turn_done = _handle->subscribe("/controller/turn/done",10,callback_turn_done);
+    ros::Subscriber sub_ir = _handle->subscribe("/perception/ir/distance",10,callback_ir);
+    ros::Subscriber sub_planes = _handle->subscribe("/vision/obstacles/planes",10,callback_planes);
+    ros::Subscriber sub_crash = _handle->subscribe("/perception/imu/peak", 10, callback_crash);
 
-    _srv_raycast = n.serviceClient<navigation_msgs::Raycast>("/mapping/raycast");
+    _pub_odom = _handle->advertise<nav_msgs::Odometry>("/pose/odometry/",10,(ros::SubscriberStatusCallback)connect_odometry_callback);
+    _pub_viz = _handle->advertise<visualization_msgs::Marker>( "visualization_marker", 0 );
+    _pub_compass = _handle->advertise<std_msgs::Int8>("/pose/compass", 10, (ros::SubscriberStatusCallback)connect_compass_callback);
+
+    _srv_raycast = _handle->serviceClient<navigation_msgs::Raycast>("/mapping/raycast");
 
     ros::spin();
 
