@@ -590,7 +590,7 @@ bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, naviga
 {
     double radius_map = request.radius;
     int radius = round(radius_map*100.0);
-    Point<int> center = robotPointToCell(Point<double>(request.x, request.y));
+    Point<int> center = transformPointToGridSystem(request.frame_id, request.x, request.y);
     Point<int> top_left(center.x - radius, center.y - radius);
     int width = radius*2;
 
@@ -609,6 +609,10 @@ bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, naviga
                     num_occluded++;
 
                 num_cells++;
+
+//                Point<int> cell(x,y);
+//                markProbabilityGrid(cell,P_OCC);
+//                updateOccupancyGrid(cell);
             }
 
         }
