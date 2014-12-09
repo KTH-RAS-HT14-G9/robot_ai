@@ -43,11 +43,11 @@ public:
     void startTurnCallback(const std_msgs::Float64::ConstPtr&);
     void stopTurnCallback(const std_msgs::Bool::ConstPtr&);
     void wallDetectedCallback(const vision_msgs::Planes::ConstPtr&);
+    void activateUpdateCallback(const std::msgs::Bool::ConstPtr&);
     bool performRaycast(navigation_msgs::RaycastRequest &request,
                         navigation_msgs::RaycastResponse &response);
     bool serviceFitRequest(navigation_msgs::FitBlobRequest& request,
                            navigation_msgs::FitBlobResponse& response);
-    //void objectDetectedCallback(const );
     void updateGrid();
     void publishMap();
     void updateTransform();
@@ -81,6 +81,7 @@ private:
     ros::Subscriber wall_sub;
     ros::Subscriber object_sub;
     ros::Publisher map_pub;
+    ros::Subscriber active_sub;
     tf::TransformListener tf_listener;
     tf::StampedTransform transform;
 
@@ -97,6 +98,7 @@ private:
     bool turning;
     Point<double> pos;
     double fl_ir_reading, fr_ir_reading, bl_ir_reading, br_ir_reading;
+    bool active;
 
     static const double INVALID_READING;
     static const double MAP_HEIGHT, MAP_WIDTH;
