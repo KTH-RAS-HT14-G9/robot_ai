@@ -12,19 +12,12 @@ from navigation_msgs.srv import *
 from ir_converter.msg import Distance
 from vision_msgs.msg import Object
 from nav_msgs.msg import Odometry
-from enum import IntEnum
 
-class RobotDirections(IntEnum):
-    FORWARD=0
-    RIGHT=1
-    BACKWARDS=2
-    LEFT=3 
+import direction_handler
+import obstacle_handler
 
-ROBOT_DIAMETER = 0.25
 RECOGNITION_TIME = 2.0
 WAITING_TIME = 0.005
-SIDE_BLOCKED_THRESHOLD = 0.35
-FRONT_BLOCKED_THRESHOLD = 0.23
 
 recognition_clock = 0.0
 detected_object = Object()
@@ -35,13 +28,11 @@ current_node = Node()
 compass_direction = Node.EAST
 
 go_to_node_pub = None
-recognize_object_pub = None
 turn_pub = None
 follow_wall_pub = None
 go_forward_pub = None
 place_node_service = None
 next_noi_service = None
-fit_blob_service = None
 
 turn_done = [False] # In array so it can be passed by reference
 go_to_node_done = [False]
@@ -91,9 +82,9 @@ class ObstacleDetected(smach.State):
 
             go_forward(False)
             follow_wall(False)
-            if can_turn_left():
+            if can_turn_left(distance):
                 turn_left()
-            elif can_turn_right():
+            elif can_turn_right(distance):
                 turn_right()
             else:
                 turn_back()
@@ -158,27 +149,6 @@ class FollowGraph(smach.State):
 
         return 'follow_graph'
 
-def check_for_interrupt():
-    if rospy.is_shutdown():
-        return sys.exit(0)
-
-def get_direction_to(node):
-    if node.edges[Node.NORTH] == current_node.id_this:
-        return Node.SOUTH
-    if node.edges[Node.EAST] == current_node.id_this:
-        return Node.WEST
-    if node.edges[Node.SOUTH] == current_node.id_this:
-        return Node.NORTH
-    if node.edges[Node.WEST] == current_node.id_this:
-        return Node.EAST
-    rospy.logerr("Next node is not neighbour to this node. current: %s, goal: %s", str(current_node), str(node))
-
-#def get_angle_to(map_dir):
-#    angle = 90.0 * ((compass_direction - map_dir + 4) % 4)
-#    if angle == 270.0:
-#        return -90.0
-#    return angle
-
 def get_next_noi(mode):
     return next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, mode)).target_node
 
@@ -188,31 +158,6 @@ def place_node(object_here):
     response = place_node_service.call(PlaceNodeRequest(current_node.id_this, compass_direction, north_blocked(), east_blocked(), south_blocked(), west_blocked(), object_here, detected_object.type, detected_object.x, detected_object.y))
     if not object_here:
         current_node = response.generated_node
-
-def north_blocked():
-    return map_dir_blocked(Node.NORTH)
-
-def west_blocked():
-    return map_dir_blocked(Node.WEST)
-
-def south_blocked():
-    return map_dir_blocked(Node.SOUTH)
-
-def east_blocked():
-    return map_dir_blocked(Node.EAST)
-
-def can_turn_left():
-    return True if distance.fl_side > SIDE_BLOCKED_THRESHOLD and distance.bl_side > SIDE_BLOCKED_THRESHOLD else False
-
-def can_turn_right():
-    return True if distance.fr_side > SIDE_BLOCKED_THRESHOLD and distance.br_side > SIDE_BLOCKED_THRESHOLD else False
-
-def obstacle_ahead():
-    return True if distance.l_front < FRONT_BLOCKED_THRESHOLD or distance.r_front < FRONT_BLOCKED_THRESHOLD else False
-
-def obstacle_behind():
-    response = fit_blob_service.call(FitBlobRequest(-ROBOT_DIAMETER+0.03, 0.0, 0.08, 0.05))
-    return not response.fits
 
 def reset_node_detected():
     global node_detected
@@ -261,7 +206,7 @@ def go_forward(should_go):
         if not should_go:
             wait_for_flag(stop_done)
 
-def update_walls_changed(): # IGNORE BACKWARDS
+def update_walls_changed(): 
     global walls_have_changed
     if not ((current_node.edges[Node.NORTH]==Node.BLOCKED) == map_dir_blocked(Node.NORTH) and 
             (current_node.edges[Node.EAST] ==Node.BLOCKED) == map_dir_blocked(Node.EAST) and
@@ -279,42 +224,9 @@ def go_to_node(node):
     go_to_node_pub.publish(node)
 
 def is_at_intersection(): 
-    if walls_changed() and not obstacle_ahead() and (can_turn_right() or can_turn_left()):
+    if walls_changed() and not obstacle_ahead() and (can_turn_right(distance) or can_turn_left(distance)):
             return True
     return False
-
-def map_dir_blocked(map_dir):
-    return robot_dir_blocked(map_to_robot_dir(map_dir))
-
-def robot_dir_blocked(robot_dir):
-    if robot_dir == RobotDirections.LEFT:
-        return not can_turn_left()
-    if robot_dir == RobotDirections.RIGHT:
-        return not can_turn_right()
-    if robot_dir == RobotDirections.FORWARD:
-        return obstacle_ahead()
-    if robot_dir == RobotDirections.BACKWARDS:
-        return obstacle_behind()
-
-def robot_to_map_dir(robot_dir):
-    if compass_direction == Node.NORTH:
-        return robot_dir
-    if compass_direction == Node.EAST:
-        return (robot_dir + 1) % 4 
-    if compass_direction == Node.SOUTH:
-        return (robot_dir + 2) % 4
-    if compass_direction == Node.WEST:
-        return (robot_dir + 3) % 4
-
-def map_to_robot_dir(map_dir):
-    if compass_direction == Node.NORTH:
-        return map_dir
-    if compass_direction == Node.WEST:
-        return (map_dir + 1) % 4
-    if compass_direction == Node.SOUTH:
-        return (map_dir + 2) % 4
-    if compass_direction == Node.EAST:
-        return (map_dir + 3) % 4
 
 def turn_done_callback(data):
     global turn_done
@@ -367,8 +279,12 @@ def compass_callback(data):
     global compass_direction
     compass_direction = data
 
+def check_for_interrupt():
+    if rospy.is_shutdown():
+        sys.exit(0)
+
 def main(argv):
-    global turn_pub, follow_wall_pub, go_forward_pub, recognize_object_pub, place_node_service, next_noi_service, current_node, fit_blob_service, go_to_node_pub
+    global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, go_to_node_pub
     rospy.init_node('brain')
 
     sm = smach.StateMachine(outcomes=['finished'])
@@ -396,10 +312,8 @@ def main(argv):
 
     rospy.wait_for_service('/navigation/graph/place_node')
     rospy.wait_for_service('/navigation/graph/next_node_of_interest')
-    rospy.wait_for_service('/mapping/fitblob')
     place_node_service = rospy.ServiceProxy('/navigation/graph/place_node', navigation_msgs.srv.PlaceNode)
     next_noi_service = rospy.ServiceProxy('/navigation/graph/next_node_of_interest', navigation_msgs.srv.NextNodeOfInterest)
-    fit_blob_service = rospy.ServiceProxy('/mapping/fitblob', navigation_msgs.srv.FitBlob)
 
     rospy.sleep(3.0)
 
