@@ -40,7 +40,7 @@ Mapping::Mapping() :
     start_turn_sub = handle.subscribe("/controller/turn/angle", 1, &Mapping::startTurnCallback, this);
     stop_turn_sub = handle.subscribe("/controller/turn/done", 1, &Mapping::stopTurnCallback, this);
     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
-    active_sub = handle.subscribe("mapping/active", 1, &Mapping::activeCallback, this);
+    active_sub = handle.subscribe("mapping/active", 1, &Mapping::activateUpdateCallback, this);
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
     pub_viz = handle.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",10);
     
@@ -360,7 +360,7 @@ void Mapping::stopTurnCallback(const std_msgs::Bool::ConstPtr & var)
     turning = false;
 }
 
-void Mapping::activeCallback(const std_msgs::Bool::ConstPtr& active)
+void Mapping::activateUpdateCallback(const std_msgs::Bool::ConstPtr& active)
 {
     this->active = active;   
 }

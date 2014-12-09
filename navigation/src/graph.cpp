@@ -377,7 +377,6 @@ void test2_graph(const std::vector<Point>& points)
 
         request.object_here = true;
         request.object_type = 0;
-        request.object_direction = p.dir;
         request.object_x = p.x;
         request.object_y = p.y;
     }
@@ -421,7 +420,6 @@ void test_graph() {
     place.object_here = true;
     place.object_x = 2.8;
     place.object_y = 1.55;
-    place.object_direction = Graph::East;
     node = _graph.place_node(2.5,1.5,place);
     _graph.place_object(node.id_this, place);
 
@@ -451,7 +449,6 @@ void test_graph() {
     place.object_here = true;
     place.object_x = 2.8;
     place.object_y = 1.48;
-    place.object_direction = Graph::North;
     node = _graph.place_node(3,1.0,place);
     _graph.place_object(node.id_this,place);
 }

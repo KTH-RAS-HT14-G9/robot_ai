@@ -43,7 +43,7 @@ public:
     void startTurnCallback(const std_msgs::Float64::ConstPtr&);
     void stopTurnCallback(const std_msgs::Bool::ConstPtr&);
     void wallDetectedCallback(const vision_msgs::Planes::ConstPtr&);
-    void activateUpdateCallback(const std::msgs::Bool::ConstPtr&);
+    void activateUpdateCallback(const std_msgs::Bool::ConstPtr&);
     bool performRaycast(navigation_msgs::RaycastRequest &request,
                         navigation_msgs::RaycastResponse &response);
     bool serviceFitRequest(navigation_msgs::FitBlobRequest& request,
