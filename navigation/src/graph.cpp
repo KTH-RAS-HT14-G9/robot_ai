@@ -464,8 +464,8 @@ int main(int argc, char **argv)
 
     ros::Rate rate(10.0);
 
-    std::vector<Point> test_points;
-    test2_graph_build(test_points);
+//    std::vector<Point> test_points;
+//    test2_graph_build(test_points);
 
     while(n.ok())
     {
