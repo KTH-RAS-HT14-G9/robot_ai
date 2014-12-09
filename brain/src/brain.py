@@ -30,15 +30,17 @@ current_node = Node()
 
 compass_direction = Node.EAST
 
-go_to_node_pub = None
+goto_node_pub = None
 turn_pub = None
 follow_wall_pub = None
 go_forward_pub = None
+mapping_active_pub = None
+follow_path_pub = None
 place_node_service = None
 next_noi_service = None
 
 turn_done = [False] # In array so it can be passed by reference
-go_to_node_done = [False]
+goto_done = [False]
 stop_done = [False]
 object_detected = False
 following_wall = False
@@ -62,9 +64,6 @@ class Explore(smach.State):
             rospy.loginfo("EXPLORE ==> OBJECT_DETECTED")
             return 'object_detected'
         elif node_detected:
-            reset_node_detected()
-            go_forward(False)
-            follow_wall(False)
             userdata.target_trait = NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR
             rospy.loginfo("EXPLORE ==> FOLLOW_GRAPH")
             return 'follow_graph'
@@ -136,23 +135,25 @@ class FollowGraph(smach.State):
         smach.State.__init__(self, outcomes=['explore', 'follow_graph'], 
                                     input_keys=['target_trait'],
                                     output_keys=['target_trait'])
-
     def execute(self, userdata):
-        next_node = get_next_noi(userdata.target_trait)
-        if(next_node.id_this == current_node.id_this):
-            go_forward(False)
-            follow_wall(False)
-            rospy.loginfo("Destination reached")
-            rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
-            return 'explore'
-        
-        go_to_node(next_node)
-        wait_for_flag(go_to_node_done)
+        go_forward(False)
+        follow_wall(False)
+        mapping_active(False)
 
+        rospy.loginfo("Following path.")
+        path = next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, trait)).target_node
+        follow_path_pub.publish(path)
+
+        goto_done[0] = False
+        wait_for_flag(goto_done)
+        rospy.loginfo("Follow path done.")
+
+        mapping_active(True)
+        reset_node_detected()
+
+        rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
         return 'follow_graph'
 
-def get_next_noi(trait):
-    return next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, trait)).target_node
 
 def place_node(object_here):
     global current_node, walls_have_changed
@@ -198,6 +199,9 @@ def follow_wall(should_follow):
         following_wall = should_follow
         follow_wall_pub.publish(should_follow)
 
+def mapping_active(active):
+    mapping_active_pub.publish(active)
+
 def go_forward(should_go):
     global going_forward, stop_done
 
@@ -218,11 +222,11 @@ def update_walls_changed():
 def walls_changed():
     return walls_have_changed
 
-def go_to_node(node):
-    global go_to_node_done
-    go_to_node_done[0] = False
+def goto_node(node):
+    global goto_done
+    goto_done[0] = False
     rospy.loginfo("Going to node: %d.", node.id_this)
-    go_to_node_pub.publish(node)
+    goto_node_pub.publish(node)
 
 def is_at_intersection(): 
     if walls_changed() and not obstacle_ahead() and (can_turn_right(distance) or can_turn_left(distance)):
@@ -262,10 +266,10 @@ def on_node_callback(node):
         current_node = node
         node_detected = True
 
-def go_to_node_done_callback(success):   
-    global go_to_node_done
-    go_to_node_done[0] = success
-    rospy.loginfo("Go to node callback. Success: %s.", str(success))
+def goto_done_callback(success):   
+    global goto_done
+    goto_done[0] = success
+    rospy.loginfo("Goto callback. Success: %s.", str(success))
 
 def odometry_callback(data):
     global odometry
@@ -280,7 +284,7 @@ def check_for_interrupt():
         sys.exit(0)
 
 def main(argv):
-    global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, go_to_node_pub
+    global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, goto_node_pub, mapping_active_pub, follow_path_pub
     rospy.init_node('brain')
 
     sm = smach.StateMachine(outcomes=['finished'])
@@ -291,12 +295,14 @@ def main(argv):
     rospy.Subscriber("/navigation/graph/on_node", Node, on_node_callback)
     rospy.Subscriber("/pose/odometry", Odometry, odometry_callback)
     rospy.Subscriber("/pose/compass", Int8, compass_callback)
-    rospy.Subscriber("/controller/goto/success", Bool, go_to_node_done_callback)
+    rospy.Subscriber("/controller/goto/success", Bool, goto_done_callback)
 
     turn_pub = rospy.Publisher("/controller/turn/angle", Float64, queue_size=10)
     follow_wall_pub = rospy.Publisher("/controller/wall_follow/active", Bool, queue_size=10)
     go_forward_pub = rospy.Publisher("/controller/forward/active", Bool, queue_size=10)
-    go_to_node_pub = rospy.Publisher("controller/goto/target_node", Node, queue_size=1)
+    goto_node_pub = rospy.Publisher("/controller/goto/target_node", Node, queue_size=1)
+    follow_path_pub = rospy.Publisher("/controllers/goto/follow_path", Path, queue_size=1)
+    mapping_active_pub = rospy.Publisher("/mapping/active", Bool, queue_size=1)
 
     with sm:
         smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
