@@ -30,22 +30,24 @@ typedef pcl::PointXYZI PCPoint;
 Mapping::Mapping() :
     fl_ir_reading(INVALID_READING), fr_ir_reading(INVALID_READING),
     bl_ir_reading(INVALID_READING), br_ir_reading(INVALID_READING),
-    pos(Point<double>(0.0,0.0)), turning(false),
+    pos(Point<double>(0.0,0.0)),
     wall_planes(new std::vector<common::vision::SegmentedPlane>()),
-    markers("map","raycasts")
+    markers("map","raycasts"), active(true)
 {
     handle = ros::NodeHandle("");
     distance_sub = handle.subscribe("/perception/ir/distance", 1, &Mapping::distanceCallback, this);
     odometry_sub = handle.subscribe("/pose/odometry/", 1, &Mapping::odometryCallback, this);
-    start_turn_sub = handle.subscribe("/controller/turn/angle", 1, &Mapping::startTurnCallback, this);
-    stop_turn_sub = handle.subscribe("/controller/turn/done", 1, &Mapping::stopTurnCallback, this);
-     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
-   // object_sub = handle.subscribe("/vision/object/position", 1, &Mapping::objectDetectedCallback, this);
+    wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
+    active_sub = handle.subscribe("mapping/active", 1, &Mapping::activateUpdateCallback, this);
+
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
     pub_viz = handle.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",10);
     
     srv_raycast = handle.advertiseService("/mapping/raycast", &Mapping::performRaycast, this);
     srv_fit = handle.advertiseService("/mapping/fitblob", &Mapping::serviceFitRequest, this);
+
+    srv_to_robot = handle.advertiseService("/mapping/transform_to_map", &Mapping::transformToRobot, this);
+    srv_to_map = handle.advertiseService("/mapping/transform_to_robot", &Mapping::transformToMap, this);
 
     occupancy_grid.header.frame_id = "world";
     nav_msgs::MapMetaData metaData;
@@ -56,51 +58,38 @@ Mapping::Mapping() :
     metaData.origin.position.y = -MAP_Y_OFFSET;
     metaData.origin.orientation.x = 180.0;
     metaData.origin.orientation.y = 180.0;
- //   metaData.origin.orientation.y = 180.0;
-   // metaData.origin.orientation.w = 180.0;
     occupancy_grid.info = metaData;
    
     initProbabilityGrid();
     initOccupancyGrid();
 }
 
+bool Mapping::transformToRobot(navigation_msgs::TransformPointRequest &request, navigation_msgs::TransformPointResponse &response)
+{
+    Point<double> transformed_point = transformPointToRobotSystem(request.source_frame_id, request.x, request.y);
+    response.x = transformed_point.x;
+    response.y = transformed_point.y;
+    return true;
+}
+
+bool Mapping::transformToMap(navigation_msgs::TransformPointRequest &request, navigation_msgs::TransformPointResponse &response)
+{
+    Point<double> transformed_point = transformPointToMapSystem(request.source_frame_id, request.x, request.y);
+    response.x = transformed_point.x;
+    response.y = transformed_point.y;
+    return true;
+}
+
 void Mapping::updateGrid()
 {
-    // if(turning)
-    //     return;
+    if(!active)
+        return;
 
     updateIR(fl_ir_reading, robot::ir::offset_front_left_forward);
     updateIR(-fr_ir_reading, robot::ir::offset_front_right_forward);
     updateIR(-br_ir_reading, -robot::ir::offset_rear_right_forward);
     updateIR(bl_ir_reading, -robot::ir::offset_rear_left_forward);
-
-    //updateWalls();
 }
-
-//void Mapping::markPointsBetween(Point<double> p1, Point<double> p2, double val)
-//{
-//    Point<double> min = p1.x <= p2.x ? p1 : p2;
-//    Point<double> max = p1.x > p2.x ? p1 : p2;
-//    double dx = max.x-min.x;
-//    double dy = max.y-min.y;
-
-//    if(std::abs(dx) < 0.01) {
-//        min = p1.y <= p2.y ? p1 : p2;
-//        max = p1.y > p2.y ? p1 : p2;
-//        double x = min.x;
-//        for(double y = min.y; y < max.y; y +=0.01)
-//        {
-//            markPoint(Point<double>(x,y),val);
-//        }
-//    } else {
-//        for(double x = min.x; x < max.x; x += 0.001)
-//        {
-//            double y = min.y + dy * (x-min.x) / dx;
-//            markPoint(Point<double>(x,y),val);
-//        }
-//    }
-//}
-
 
 /**
   * Adapted from
@@ -190,7 +179,6 @@ void Mapping::updateWalls()
         common::vision::SegmentedPlane& plane = wall_planes->at(i);
 
         double width = std::max(plane.get_obb().get_width(), plane.get_obb().get_depth());
-        //ROS_ERROR("Wall w=%.3lf, h=%.3lf, d=%.3lf",plane.get_obb().get_width(), plane.get_obb().get_height(), plane.get_obb().get_depth());
 
         //only consider walls that have a minimum width
         if(width < 0.2)
@@ -214,22 +202,6 @@ void Mapping::updateWalls()
     }
 
 }
-
-/*void Mapping::markPointOccupied(Point<double> point)
-{
-    Point<int> cell = robotPointToCell(point);
-    int x = cell.x;
-    int y = cell.y;
-    for(int i = x-1; i < x+1; ++i)
-    {
-        for(int j = y-1; j < y+1; ++j)
-        {
-            Point<int> c(i, j);
-            markProbabilityGrid(c, P_OCC);
-            updateOccupancyGrid(c);
-        }
-    }
-}*/
 
 void Mapping::markCellOccupied(Point<int> cell, int neighborhood)
 {
@@ -352,16 +324,6 @@ void Mapping::odometryCallback(const nav_msgs::Odometry::ConstPtr& odom)
     pos = Point<double>(x,y);
 }
 
-void Mapping::startTurnCallback(const std_msgs::Float64::ConstPtr & angle)
-{
-    turning = true;
-}
-
-void Mapping::stopTurnCallback(const std_msgs::Bool::ConstPtr & var)
-{
-    turning = false;
-}
-
 void Mapping::updateTransform()
 {
     try {
@@ -461,6 +423,22 @@ Point<int> Mapping::transformPointToGridSystem(std::string& frame_id, double x, 
     tf_listener.transformPoint("map",stamped_in,stamped_out);
 
     return mapPointToCell(Point<double>(stamped_out.point.x + MAP_X_OFFSET, stamped_out.point.y + MAP_Y_OFFSET));
+}
+
+Point<double> Mapping::transformPointToMapSystem(std::string& frame_id, double x, double y)
+{
+    geometry_msgs::PointStamped stamped_in;
+    stamped_in.header.frame_id = frame_id;
+    //stamped_in.header.stamp = ros::Time::now();
+    stamped_in.header.stamp = transform.stamp_;
+    stamped_in.point.x = x;
+    stamped_in.point.y = y;
+    stamped_in.point.z = 0;
+
+    geometry_msgs::PointStamped stamped_out;
+    tf_listener.transformPoint("map",stamped_in,stamped_out);
+
+    return Point<double>(stamped_out.point.x + MAP_X_OFFSET, stamped_out.point.y + MAP_Y_OFFSET);
 }
 
 Point<double> Mapping::transformCellToMap(Point<int>& cell)
@@ -621,5 +599,9 @@ bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, naviga
     response.fits = ((double)num_occluded/(double)num_cells) < request.max_occlusion_ratio;
 
     return true;
+}
 
+void Mapping::activateUpdateCallback(const std_msgs::Bool::ConstPtr& active)
+{
+    this->active = active;   
 }
