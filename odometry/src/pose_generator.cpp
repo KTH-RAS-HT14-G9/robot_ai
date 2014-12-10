@@ -140,7 +140,7 @@ void send_marker(tf::Transform& transform) {
     _robot_marker.scale.x = robot::dim::wheel_distance;
     _robot_marker.scale.y = robot::dim::wheel_distance;
     _robot_marker.scale.z = robot::dim::robot_height;
-    _robot_marker.color.a = 1.0;
+    _robot_marker.color.a = 0.5;
     _robot_marker.color.r = 0.0;
     _robot_marker.color.g = 141.0 / 255.0;
     _robot_marker.color.b = 240.0 / 255.0;
