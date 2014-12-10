@@ -21,6 +21,7 @@
 #include <common/segmented_plane.h>
 #include <navigation_msgs/Raycast.h>
 #include <navigation_msgs/FitBlob.h>
+#include <navigation_msgs/UnexploredRegion.h>
 #include <common/marker_delegate.h>
 
 using std::vector;
@@ -49,6 +50,8 @@ public:
                         navigation_msgs::RaycastResponse &response);
     bool serviceFitRequest(navigation_msgs::FitBlobRequest& request,
                            navigation_msgs::FitBlobResponse& response);
+    bool serviceHasUnexploredRegion(navigation_msgs::UnexploredRegionRequest& request,
+                                    navigation_msgs::UnexploredRegionResponse& response);
     void updateGrid();
     void publishMap();
     void updateTransform();
@@ -75,6 +78,7 @@ private:
     void initOccupancyGrid();
     void updateWalls(bool markOnHaveSeen);
     bool isObstacle(int x, int y, bool inHaveSeen = false);
+    bool isUnexplored(int x, int y);
 
     ros::NodeHandle handle;
     ros::Subscriber distance_sub;
@@ -101,6 +105,7 @@ private:
 
     ros::ServiceServer srv_raycast;
     ros::ServiceServer srv_fit;
+    ros::ServiceServer srv_isunexplored;
 
     common::vision::SegmentedPlane::ArrayPtr wall_planes;
 

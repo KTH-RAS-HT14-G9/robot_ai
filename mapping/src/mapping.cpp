@@ -52,6 +52,7 @@ Mapping::Mapping() :
     
     srv_raycast = handle.advertiseService("/mapping/raycast", &Mapping::performRaycast, this);
     srv_fit = handle.advertiseService("/mapping/fitblob", &Mapping::serviceFitRequest, this);
+    srv_isunexplored = handle.advertiseService("/mapping/has_unexplored_region", &Mapping::serviceHasUnexploredRegion, this);
 
     occupancy_grid.header.frame_id = "world";
     nav_msgs::MapMetaData metaData;
@@ -515,6 +516,20 @@ bool Mapping::isObstacle(int x, int y, bool inHaveSeen)
         if(prob_grid[y][x] > FREE_OCCUPIED_THRESHOLD)
             return true;
     }
+    return false;
+}
+
+bool Mapping::isUnexplored(int x, int y)
+{
+    if (y < 0 || y >= seen_grid.size())
+        return false;
+    if (x < 0 || x >= seen_grid[y].size())
+        return false;
+
+    if (seen_grid[y][x] == 0)
+        return true;
+
+    return false;
 }
 
 void addPointToList(std::vector<Point<int> >& list, int x, int y)
@@ -708,10 +723,6 @@ bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, naviga
                     num_occluded++;
 
                 num_cells++;
-
-//                Point<int> cell(x,y);
-//                markProbabilityGrid(cell,P_OCC);
-//                updateOccupancyGrid(cell);
             }
 
         }
@@ -721,4 +732,47 @@ bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, naviga
 
     return true;
 
+}
+
+bool Mapping::serviceHasUnexploredRegion(navigation_msgs::UnexploredRegionRequest& request,
+                                         navigation_msgs::UnexploredRegionResponse& response)
+{
+    double radius_map = request.radius;
+    int radius = round(radius_map*100.0);
+    Point<int> center = transformPointToGridSystem(request.frame_id, request.x, request.y);
+    Point<int> top_left(center.x - radius, center.y - radius);
+    int width = radius*2;
+
+    int num_cells = 0;
+    int num_occluded = 0;
+    int num_unexplored = 0;
+
+    //count occluded cells
+    for(int y = top_left.y; y < top_left.y+width; ++y) {
+        for(int x = top_left.x; x < top_left.x+width; ++x) {
+
+            int dx = center.x - x; // horizontal offset
+            int dy = center.y - y; // vertical offset
+            if ( (dx*dx + dy*dy) <= (radius*radius) )
+            {
+                if (isObstacle(x,y))
+                    num_occluded++;
+
+                if (isUnexplored(x,y))
+                    num_unexplored++;
+
+                num_cells++;
+            }
+
+        }
+    }
+
+    response.has_unexplored = false;
+    double occlusion_ratio = ((double)num_occluded/(double)num_cells);
+    if (occlusion_ratio < request.max_occlusion_ratio)
+    {
+        double unexplored_ratio = ((double)num_unexplored/(double)num_cells);
+
+        response.has_unexplored = unexplored_ratio > request.min_notseen_ratio;
+    }
 }
