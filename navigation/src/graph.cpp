@@ -91,11 +91,11 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
 
     if (request.object_here == true) {
 
-        if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
+       if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
         {
             _graph.place_object(response.generated_node.id_this, request);
         }
-        else success = false;
+      else success = false;
     }
 
     return success;
@@ -218,7 +218,7 @@ std::vector<int> find_shortest_path()
     std::vector<int> best_path;
     get_object_node_indexs(object_nodes);
     int perm_num=factorial_cal(object_nodes.size());
-    if (object_nodes.size()==0) {return std::vector<int>();}
+    if (object_nodes.size()==0) {best_path.push_back(_graph.get_node(0).id_this);}
 
     std::vector<std::vector <int> > perm;
     perm.resize(perm_num);
@@ -256,7 +256,7 @@ std::vector<int> find_shortest_path()
     if (best_id== -1)
     {
         std::cout<<"china"<<std::endl;
-        return std::vector<int>();
+        best_path.push_back(_graph.get_node(0).id_this);
      }
     for (int i=0; i<object_nodes.size()+1;++i)
     {
@@ -312,19 +312,19 @@ void test2_graph_build(std::vector<Point>& points) {
 
     Point p0(0,0);
     Point p1(2,0);
-    Point pObject1(2,0.5); pObject1.dir = navigation_msgs::Node::OBJECT;
+    //Point pObject1(2,0.5); pObject1.dir = navigation_msgs::Node::OBJECT;
     Point p2(2,1);
     Point p3(2,-1);
-    Point pObject2(2,-1.5); pObject2.dir = navigation_msgs::Node::OBJECT;
+    //Point pObject2(2,-1.5); pObject2.dir = navigation_msgs::Node::OBJECT;
 
     linspace(points, p0, p1, navigation_msgs::Node::EAST, 5);
     p1 = points[points.size()-1];
-    points.push_back(pObject1);
+    //points.push_back(pObject1);
     linspace(points, p1, p2, navigation_msgs::Node::NORTH, 5);
     p2 = points[points.size()-1];
     linspace(points, p2, p3, navigation_msgs::Node::SOUTH, 5);
     p3 = points[points.size()-1];
-    points.push_back(pObject2);
+    //points.push_back(pObject2);
 
     _test2_previous_node.id_this = -1;
 }
@@ -493,13 +493,13 @@ int main(int argc, char **argv)
 
         _graph_viz->draw();
 
-        //if (_test2_i >= test_points.size()) {
-        //best_path=find_shortest_path();
-            // for (int i=0; i<best_path.size();++i){
-             //  std::cout<<best_path[i]<< "->"<<std::endl;
-           //  }
+       // if (_test2_i >= test_points.size()) {
+      //      best_path=find_shortest_path();
+      //       for (int i=0; i<best_path.size();++i){
+      //         std::cout<<best_path[i]<< "->"<<std::endl;
+        //     }
 
-        //}
+       // }
 
         ros::spinOnce();
         rate.sleep();
