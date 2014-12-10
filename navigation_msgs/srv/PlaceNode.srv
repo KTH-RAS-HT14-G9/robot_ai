@@ -9,6 +9,7 @@ bool west_blocked
 
 bool object_here
 int32 object_type
+int32 object_direction
 float32 object_x
 float32 object_y
 
