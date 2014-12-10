@@ -158,14 +158,31 @@ class FollowGraph(smach.State):
         mapping_active(True)
         reset_node_detected()
 
+        if userdata.trait == NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR:
+            rospy.loginfo("Turning to unexplored edge.")
+            if current_node.edges[Node.NORTH] == Node.UNKNOWN:
+                turn(get_angle_to(Node.NORTH))
+            elif current_node.edges[Node.EAST] == Node.UNKNOWN:
+                turn(get_angle_to(Node.EAST))
+            elif current_node.edges[Node.SOUTH] == Node.UNKNOWN:
+                turn(get_angle_to(Node.SOUTH))
+            elif current_node.edges[Node.WEST] == Node.UNKNOWN:
+                turn(get_angle_to(Node.WEST))
+
         rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
         return 'follow_graph'
 
+def get_angle_to(map_dir):
+    angle = 90.0 * ((current_direction - map_dir + 4) % 4)
+    if angle == 270.0:
+        return -90.0
+    return angle
+
 def follow_path(trait):
-     path = next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, userdata.trait)).path
-        follow_path_pub.publish(path)
-        goto_done[0] = False
-        wait_for_flag(goto_done)
+    path = next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, userdata.trait)).path
+    follow_path_pub.publish(path)
+    goto_done[0] = False
+    wait_for_flag(goto_done)
 
 def get_close_to_object():
 
