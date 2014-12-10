@@ -91,11 +91,11 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
 
     if (request.object_here == true) {
 
-      //  if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
+       if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
         {
             _graph.place_object(response.generated_node.id_this, request);
         }
-      //else success = false;
+      else success = false;
     }
 
     return success;
@@ -474,14 +474,14 @@ int main(int argc, char **argv)
 
     ros::Rate rate(10.0);
    ///////test
-    std::vector<Point> test_points;
-    test2_graph_build(test_points);
-    std::vector<int> best_path;
+  //  std::vector<Point> test_points;
+  //  test2_graph_build(test_points);
+  //  std::vector<int> best_path;
 
 
     while(n.ok())
     {
-        test2_graph(test_points);
+        //test2_graph(test_points);
 
         float x = _position.x;
         float y = _position.y;
@@ -493,13 +493,13 @@ int main(int argc, char **argv)
 
         _graph_viz->draw();
 
-        if (_test2_i >= test_points.size()) {
-            best_path=find_shortest_path();
-             for (int i=0; i<best_path.size();++i){
-               std::cout<<best_path[i]<< "->"<<std::endl;
-             }
+       // if (_test2_i >= test_points.size()) {
+      //      best_path=find_shortest_path();
+      //       for (int i=0; i<best_path.size();++i){
+      //         std::cout<<best_path[i]<< "->"<<std::endl;
+        //     }
 
-        }
+       // }
 
         ros::spinOnce();
         rate.sleep();
