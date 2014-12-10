@@ -9,6 +9,7 @@
 #include <nav_msgs/MapMetaData.h>
 #include <std_msgs/Header.h>
 #include <common/robot.h>
+#include <common/parameter.h>
 #include <math.h>
 #include <tf/transform_listener.h>
 #include <tf/transform_broadcaster.h>
@@ -54,19 +55,21 @@ public:
 
 private:
     //void markPointsBetween(Point<double> p1, Point<double> p2, double val);
-    void markPointsBetween(Point<int> p0, Point<int> p1, double val);
+    void markPointsBetween(Point<int> p0, Point<int> p1, double val, bool markInSeen = false);
     void updateIR(double ir_reading, double ir_x_offset);
-    //void markPointOccupied(Point<double> p);
+    void updateHaveSeen();
     void markCellOccupied(Point<int> cell, int neighborhood = 1);
     void markPoint(Point<double> p, double val);
     Point<int> robotPointToCell(Point<double> p);
     Point<double> robotToMapTransform(Point<double> p);
     Point<int> mapPointToCell(Point<double> p);
     Point<double> transformPointToRobotSystem(std::string& frame_id, double x, double y);
-    Point<int> transformPointToGridSystem(std::string& frame_id, double x, double y);
+    Point<int> transformPointToGridSystem(const std::string &frame_id, double x, double y);
     Point<double> transformCellToMap(Point<int>& cell);
     void markProbabilityGrid(Point<int> cell, double log_prob);
+    void markSeenGrid(Point<int> cell, bool flag);
     void updateOccupancyGrid(Point<int>);
+    void updateSeenVizGrid(Point<int>);
     bool isIRValid(double reading);
     void initProbabilityGrid();
     void initOccupancyGrid();
@@ -80,13 +83,21 @@ private:
     ros::Subscriber stop_turn_sub;
     ros::Subscriber wall_sub;
     ros::Subscriber object_sub;
-    ros::Publisher map_pub;
     ros::Subscriber active_sub;
+
+    ros::Publisher map_pub;
+    ros::Publisher seen_pub;
+
+    Parameter<double> frustum_fov;
+    Parameter<double> frustum_dist;
+    Parameter<bool> use_planes;
+
     tf::TransformListener tf_listener;
     tf::StampedTransform transform;
 
     ros::Publisher pub_viz;
-    common::MarkerDelegate markers;
+    common::MarkerDelegate markers_map;
+    common::MarkerDelegate markers_robot;
 
     ros::ServiceServer srv_raycast;
     ros::ServiceServer srv_fit;
@@ -94,7 +105,10 @@ private:
     common::vision::SegmentedPlane::ArrayPtr wall_planes;
 
     vector<vector<double> > prob_grid;
+    vector<vector<bool> > seen_grid;
     nav_msgs::OccupancyGrid occupancy_grid;
+    nav_msgs::OccupancyGrid seen_viz_grid;
+
     bool turning;
     Point<double> pos;
     double fl_ir_reading, fr_ir_reading, bl_ir_reading, br_ir_reading;

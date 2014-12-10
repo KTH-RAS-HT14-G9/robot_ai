@@ -32,7 +32,12 @@ Mapping::Mapping() :
     bl_ir_reading(INVALID_READING), br_ir_reading(INVALID_READING),
     pos(Point<double>(0.0,0.0)), turning(false),
     wall_planes(new std::vector<common::vision::SegmentedPlane>()),
-    markers("map","raycasts")
+    markers_map("map","raycasts"),
+    markers_robot("robot","planes"),
+    frustum_fov("/mapping/frustum/fov",45.0),
+    frustum_dist("/mapping/frustum/dist",0.6),
+    use_planes("/mapping/use_planes",false),
+    active(true)
 {
     handle = ros::NodeHandle("");
     distance_sub = handle.subscribe("/perception/ir/distance", 1, &Mapping::distanceCallback, this);
@@ -42,6 +47,7 @@ Mapping::Mapping() :
     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
     active_sub = handle.subscribe("mapping/active", 1, &Mapping::activateUpdateCallback, this);
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
+    seen_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/seen_grid",1);
     pub_viz = handle.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",10);
     
     srv_raycast = handle.advertiseService("/mapping/raycast", &Mapping::performRaycast, this);
@@ -57,54 +63,34 @@ Mapping::Mapping() :
     metaData.origin.orientation.x = 180.0;
     metaData.origin.orientation.y = 180.0;
     occupancy_grid.info = metaData;
-   
+    seen_viz_grid.info = metaData;
+
     initProbabilityGrid();
     initOccupancyGrid();
 }
 
 void Mapping::updateGrid()
 {
-     if(!active)
-         return;
+    if(active) {
+        updateIR(fl_ir_reading, robot::ir::offset_front_left_forward);
+        updateIR(-fr_ir_reading, robot::ir::offset_front_right_forward);
+        updateIR(-br_ir_reading, -robot::ir::offset_rear_right_forward);
+        updateIR(bl_ir_reading, -robot::ir::offset_rear_left_forward);
 
-    updateIR(fl_ir_reading, robot::ir::offset_front_left_forward);
-    updateIR(-fr_ir_reading, robot::ir::offset_front_right_forward);
-    updateIR(-br_ir_reading, -robot::ir::offset_rear_right_forward);
-    updateIR(bl_ir_reading, -robot::ir::offset_rear_left_forward);
+        if (use_planes())
+            updateWalls();
+    }
 
-    //updateWalls();
+    updateHaveSeen();
+
 }
-
-//void Mapping::markPointsBetween(Point<double> p1, Point<double> p2, double val)
-//{
-//    Point<double> min = p1.x <= p2.x ? p1 : p2;
-//    Point<double> max = p1.x > p2.x ? p1 : p2;
-//    double dx = max.x-min.x;
-//    double dy = max.y-min.y;
-
-//    if(std::abs(dx) < 0.01) {
-//        min = p1.y <= p2.y ? p1 : p2;
-//        max = p1.y > p2.y ? p1 : p2;
-//        double x = min.x;
-//        for(double y = min.y; y < max.y; y +=0.01)
-//        {
-//            markPoint(Point<double>(x,y),val);
-//        }
-//    } else {
-//        for(double x = min.x; x < max.x; x += 0.001)
-//        {
-//            double y = min.y + dy * (x-min.x) / dx;
-//            markPoint(Point<double>(x,y),val);
-//        }
-//    }
-//}
 
 
 /**
   * Adapted from
   * https://github.com/clearpathrobotics/occupancy_grid_utils/blob/hydro-devel/include/occupancy_grid_utils/impl/ray_trace_iterator.h
   */
-void Mapping::markPointsBetween(Point<int> p0, Point<int> p1, double val)
+void Mapping::markPointsBetween(Point<int> p0, Point<int> p1, double val, bool markInSeen)
 {
     const int dx = p1.x-p0.x;
     const int dy = p1.y-p0.y;
@@ -138,8 +124,14 @@ void Mapping::markPointsBetween(Point<int> p0, Point<int> p1, double val)
 
     Point<int> cell(p0.x,p0.y);
 
-    markProbabilityGrid(cell, val);
-    updateOccupancyGrid(cell);
+    if (markInSeen) {
+        markSeenGrid(cell, true);
+        updateSeenVizGrid(cell);
+    }
+    else {
+        markProbabilityGrid(cell, val);
+        updateOccupancyGrid(cell);
+    }
 
     while (cell.x != p1.x || cell.y != p1.y)
     {
@@ -152,8 +144,18 @@ void Mapping::markPointsBetween(Point<int> p0, Point<int> p1, double val)
             error -= error_threshold;
         }
 
-        markProbabilityGrid(cell, val);
-        updateOccupancyGrid(cell);
+        if (markInSeen) {
+            if (isObstacle(cell.x,cell.y))
+                break;
+            else {
+                markSeenGrid(cell, true);
+                updateSeenVizGrid(cell);
+            }
+        }
+        else {
+            markProbabilityGrid(cell, val);
+            updateOccupancyGrid(cell);
+        }
     }
 }
 
@@ -211,6 +213,42 @@ void Mapping::updateWalls()
         markPointsBetween(cell_p0, cell_p1, P_OCC);
     }
 
+}
+
+void rotatePoint(Point<int> p, Point<int> origin, double angle_rad, Point<int>& target)
+{
+    double c = std::cos(angle_rad);
+    double s = std::sin(angle_rad);
+
+    double o_x = origin.x;
+    double o_y = origin.y;
+
+    double p_x = p.x;
+    double p_y = p.y;
+
+    double x = o_x + c*(p_x-o_x) - s*(p_y-o_y);
+    double y = o_y + s*(p_x-o_x) + c*(p_y-o_y);
+
+    target.x = round(x);
+    target.y = round(y);
+}
+
+void Mapping::updateHaveSeen()
+{
+    Point<int> origin = robotPointToCell(Point<double>(0,0));
+    Point<int> end = robotPointToCell(Point<double>(frustum_dist(),0));
+    Point<int> p1;
+
+    double angle0 = -DEG2RAD(frustum_fov())/2.0;
+    double angle1 = -angle0;
+
+    double dangle = DEG2RAD(1.0);
+
+    for(double angle = angle0; angle < angle1; angle += dangle)
+    {
+        rotatePoint(end, origin, angle, p1);
+        markPointsBetween(origin, p1, 1.0, true);
+    }
 }
 
 /*void Mapping::markPointOccupied(Point<double> point)
@@ -282,6 +320,18 @@ Point<int> Mapping::mapPointToCell(Point<double> point)
     return Point<int>(x,y);
 }
 
+void Mapping::markSeenGrid(Point<int> cell, bool flag)
+{
+    if (cell.y < 0 || cell.y >= seen_grid.size() ||
+        cell.x < 0 || cell.x >= seen_grid[cell.y].size())
+    {
+        ROS_ERROR("[Mapping::markSeenGrid] Array out of bounds");
+        return;
+    }
+
+    seen_grid[cell.y][cell.x] = flag;
+}
+
 void Mapping::markProbabilityGrid(Point<int> cell, double log_prob)
 {
     if (cell.y < 0 || cell.y >= prob_grid.size() ||
@@ -312,6 +362,22 @@ void Mapping::updateOccupancyGrid(Point<int> cell)
         occupancy_grid.data[pos] = UNKNOWN;
 }
 
+void Mapping::updateSeenVizGrid(Point<int> cell)
+{
+    if (cell.y < 0 || cell.y >= seen_grid.size() ||
+        cell.x < 0 || cell.x >= seen_grid[cell.y].size())
+    {
+        ROS_ERROR("[Mapping::markProbabilityGrid] Array out of bounds");
+        return;
+    }
+
+    int pos = cell.x*GRID_WIDTH + cell.y;
+    if(seen_grid[cell.y][cell.x] == true)
+        seen_viz_grid.data[pos] = FREE;
+    else
+        seen_viz_grid.data[pos] = UNKNOWN;
+}
+
 bool Mapping::isIRValid(double value)
 {
     return std::abs(value) < MAX_IR_DIST && std::abs(value) > MIN_IR_DIST;
@@ -321,11 +387,16 @@ void Mapping::initProbabilityGrid()
 {
     prob_grid.resize(GRID_HEIGHT);
     for(int i = 0; i < GRID_HEIGHT; ++i)
-        prob_grid[i].resize(GRID_WIDTH);
+        prob_grid[i].resize(GRID_WIDTH, P_PRIOR);
 
+//    for(int i = 0; i < GRID_HEIGHT; ++i)
+//        for(int j = 0; j < GRID_WIDTH; ++j)
+//            prob_grid[i][j] = P_PRIOR;
+
+
+    seen_grid.resize(GRID_HEIGHT);
     for(int i = 0; i < GRID_HEIGHT; ++i)
-        for(int j = 0; j < GRID_WIDTH; ++j)
-            prob_grid[i][j] = P_PRIOR;
+        seen_grid[i].resize(GRID_WIDTH, false);
 }
 
 void Mapping::initOccupancyGrid()
@@ -333,6 +404,10 @@ void Mapping::initOccupancyGrid()
     occupancy_grid.data.resize(GRID_WIDTH*GRID_HEIGHT);
     for(int i = 0; i < GRID_HEIGHT*GRID_WIDTH; ++i)
             occupancy_grid.data[i] = UNKNOWN;
+
+    seen_viz_grid.data.resize(GRID_WIDTH*GRID_HEIGHT);
+    for(int i = 0; i < GRID_HEIGHT*GRID_WIDTH; ++i)
+        seen_viz_grid.data[i] = UNKNOWN;
 }
 
 void Mapping::distanceCallback(const ir_converter::Distance::ConstPtr& distance)
@@ -380,15 +455,16 @@ void Mapping::wallDetectedCallback(const vision_msgs::Planes::ConstPtr & msg)
     wall_planes->clear();
     common::vision::msgToPlanes(msg, wall_planes);
 
-    markers.add(msg);
-    pub_viz.publish(markers.get());
-    markers.clear();
+    markers_robot.add(msg);
+    pub_viz.publish(markers_robot.get());
+    markers_robot.clear();
 
 }
 
 void Mapping::publishMap()
 {
     map_pub.publish(occupancy_grid);
+    seen_pub.publish(seen_viz_grid);
 }
 
 int main(int argc, char **argv)
@@ -403,8 +479,9 @@ int main(int argc, char **argv)
         mapping.updateTransform();
         ++counter;
         mapping.updateGrid();
-        if(counter % 10 == 0)
+        if(counter % 10 == 0) {
             mapping.publishMap();
+        }
         ros::spinOnce();
         loop_rate.sleep();
     }
@@ -450,7 +527,7 @@ Point<double> Mapping::transformPointToRobotSystem(std::string& frame_id, double
     return Point<double>(stamped_out.point.x, stamped_out.point.y);
 }
 
-Point<int> Mapping::transformPointToGridSystem(std::string& frame_id, double x, double y)
+Point<int> Mapping::transformPointToGridSystem(const std::string& frame_id, double x, double y)
 {
     geometry_msgs::PointStamped stamped_in;
     stamped_in.header.frame_id = frame_id;
@@ -575,15 +652,15 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
 
     if (response.hit) {
         Point<double> map_p1(response.hit_x, response.hit_y);
-        markers.add_line(p0_map.x,p0_map.y, map_p1.x,map_p1.y,0.1,0.01,255,0,0);
+        markers_map.add_line(p0_map.x,p0_map.y, map_p1.x,map_p1.y,0.1,0.01,255,0,0);
     }
     else {
         Point<double> p1_map = transformCellToMap(p1);
-        markers.add_line(p0_map.x,p0_map.y, p1_map.x,p1_map.y,0.1,0.01,0,255,0);
+        markers_map.add_line(p0_map.x,p0_map.y, p1_map.x,p1_map.y,0.1,0.01,0,255,0);
     }
 
-    pub_viz.publish(markers.get());
-    markers.clear();
+    pub_viz.publish(markers_map.get());
+    markers_map.clear();
 
     return true;
 
