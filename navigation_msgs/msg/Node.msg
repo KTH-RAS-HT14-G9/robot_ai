@@ -8,9 +8,6 @@ int32 OBJECT=4
 
 int32[] edges
 
-int32 UNKNOWN=-1
-int32 BLOCKED=-2
-
 bool object_here
 int32 object_type
 
