@@ -158,7 +158,7 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
         response.path.path.clear();
         response.path.path.clear();
         response.path.path.reserve(_path.path.size());
-        for(int i = 1; i < _path.path.size(); ++i) {
+        for(int i = 0; i < _path.path.size(); ++i) {
             response.path.path.push_back(_graph.get_node(_path.path[i]));
         }
     }
@@ -465,7 +465,7 @@ int main(int argc, char **argv)
 
     ros::Subscriber sub_odom = n.subscribe("/pose/odometry",10,callback_odometry);
 
-    ros::ServiceServer srv_place_ndoe = n.advertiseService("/navigation/graph/place_node",service_place_node);
+    ros::ServiceServer srv_place_node = n.advertiseService("/navigation/graph/place_node",service_place_node);
     ros::ServiceServer srv_next_noi = n.advertiseService("/navigation/graph/next_node_of_interest",service_next_noi);
 
     navigation_msgs::Node node;
