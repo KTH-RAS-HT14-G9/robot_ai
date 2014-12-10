@@ -36,7 +36,7 @@ int main(int argc, char **argv)
 	_pub_imu = handle.advertise<std_msgs::Time>("/perception/imu/peak",10);
 	ros::Subscriber sub_active = handle.subscribe("/perception/imu/active",10,
 						&callback_activate);
-	ros::Subscriber sub_imu = handle.subscribe("/imu/data",10,
+	ros::Subscriber sub_imu = handle.subscribe("/imu/data_raw",10,
 						&callback_imu);
 
 	ros::spin();
