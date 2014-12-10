@@ -39,8 +39,8 @@ Mapping::Mapping() :
     odometry_sub = handle.subscribe("/pose/odometry/", 1, &Mapping::odometryCallback, this);
     start_turn_sub = handle.subscribe("/controller/turn/angle", 1, &Mapping::startTurnCallback, this);
     stop_turn_sub = handle.subscribe("/controller/turn/done", 1, &Mapping::stopTurnCallback, this);
-    wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
-    active_sub = handle.subscribe("mapping/active", 1, &Mapping::activateUpdateCallback, this);
+     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
+   // object_sub = handle.subscribe("/vision/object/position", 1, &Mapping::objectDetectedCallback, this);
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
     pub_viz = handle.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",10);
     
@@ -56,6 +56,8 @@ Mapping::Mapping() :
     metaData.origin.position.y = -MAP_Y_OFFSET;
     metaData.origin.orientation.x = 180.0;
     metaData.origin.orientation.y = 180.0;
+ //   metaData.origin.orientation.y = 180.0;
+   // metaData.origin.orientation.w = 180.0;
     occupancy_grid.info = metaData;
    
     initProbabilityGrid();
@@ -64,8 +66,8 @@ Mapping::Mapping() :
 
 void Mapping::updateGrid()
 {
-     if(!active)
-         return;
+    // if(turning)
+    //     return;
 
     updateIR(fl_ir_reading, robot::ir::offset_front_left_forward);
     updateIR(-fr_ir_reading, robot::ir::offset_front_right_forward);
@@ -358,11 +360,6 @@ void Mapping::startTurnCallback(const std_msgs::Float64::ConstPtr & angle)
 void Mapping::stopTurnCallback(const std_msgs::Bool::ConstPtr & var)
 {
     turning = false;
-}
-
-void Mapping::activateUpdateCallback(const std_msgs::Bool::ConstPtr& active)
-{
-    this->active = active;   
 }
 
 void Mapping::updateTransform()

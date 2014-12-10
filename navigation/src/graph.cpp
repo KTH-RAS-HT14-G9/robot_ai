@@ -91,7 +91,7 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
 
     if (request.object_here == true) {
 
-        if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
+    if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
         {
             _graph.place_object(response.generated_node.id_this, request);
         }
@@ -101,11 +101,123 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
     return success;
 }
 
+int factorial_cal(int n)
+{
+    if (n==0) return 1;
+    int fact=1;
+    for (int i=1;i<=n;++i)
+    {
+        fact=fact*i;
+    }
+    return fact;
+}
+
+void get_object_node_indexs(std::vector<int> &object_nodes)
+{
+    object_nodes.reserve(_graph.num_nodes());
+    
+    
+    for (int i=0; i< _graph.num_nodes();++i)
+    {
+        if (_graph.get_node(i).object_here)
+        {
+            object_nodes.push_back(_graph.get_node(i).id_this);
+        }
+    }
+    // std::cout<<object_nodes.size()<<std::endl;
+}
+
+void generate_all_permutations( std::vector<int>& object_nodes,std::vector<std::vector <int> >& perm)
+{
+    int i=0;
+    do {
+        perm[i][0]=_graph.get_node(0).id_this; // add start node
+        for (int j=0;j<object_nodes.size();++j)
+        {
+            perm[i][j+1]=object_nodes[j];
+        }
+        i=i+1;
+    } while ( std::next_permutation(object_nodes.begin(),object_nodes.end() ));
+}
+
+std::vector<int> tsp_traverse_all_objects()
+{
+    
+    std::vector<int> object_nodes;
+    std::vector<int> best_path;
+    std::vector<int> best_objects;
+    get_object_node_indexs(object_nodes);
+    int perm_num=factorial_cal(object_nodes.size());
+    if (object_nodes.size()==0)
+    {
+        best_path.push_back(_graph.get_node(0).id_this);
+        return best_path;
+    }
+    
+    std::vector<std::vector <int> > perm;
+    perm.resize(perm_num);
+    best_objects.reserve(object_nodes.size()+2);
+    best_path.reserve(_graph.num_nodes()*3);
+    for (int i=0;i<perm_num;++i)
+    {
+        perm[i].resize(object_nodes.size()+1); //+1 for starting node
+    }
+    
+    generate_all_permutations(object_nodes,perm);
+    double shortest=std::numeric_limits<double>::infinity();
+    int best_id =-1;
+    double dist=0;
+    // do iterations for all permutations
+    for (int i=0; i<perm_num;++i)
+    {
+        double dist_sum=0;
+        for (int j=0; j<object_nodes.size();++j)
+        {
+            _graph.path_to_node(perm[i][j], perm[i][j+1], _path.path,dist);
+            std::cout<<"from "<<perm[i][j]<<"to "<<perm[i][j+1]<<" dist"<<dist<<std::endl;
+            dist_sum=dist_sum+dist;
+        }
+        
+        _graph.path_to_node(perm[i][object_nodes.size()-1], perm[i][0], _path.path,dist); // for the last object to the strating point
+        std::cout<<"going back dis  "<<dist<< std::endl;
+        dist_sum=dist_sum+dist;
+        std::cout<<dist_sum<<std::endl;
+        if (dist_sum<shortest)
+        {
+            best_id=i;
+            shortest=dist_sum;
+        }
+    }
+    if (best_id== -1)
+    {
+        std::cout<<"china"<<std::endl;
+        best_objects.push_back(_graph.get_node(0).id_this);
+    }
+    for (int i=0; i<object_nodes.size()+1;++i)
+    {
+        best_objects.push_back(perm[best_id][i]);
+    }
+    best_objects.push_back(_graph.get_node(0).id_this);
+    
+    for (int i=0; i<best_objects.size()-1;++i)
+    {
+        std::vector <int > nodes_between;
+        _graph.path_to_node(best_objects[i], best_objects[i+1], nodes_between,dist);
+        for (int j=0; j<nodes_between.size()-1;++j)
+        {
+            best_path.push_back(nodes_between[j]);
+        }
+    }
+    best_path.push_back(_graph.get_node(0).id_this);
+    return best_path;
+    
+}
+
 void init_path_to_noi(int id_from, int trait) {
     _path.next = 0;
     _path.trait = trait;
     _path.path.clear();
-
+    
     if (trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_UNKNOWN_DIR) {
         ROS_INFO("Finding shortest path to next unkown location...");
         _graph.path_to_next_unknown(id_from, _path.path);
@@ -120,14 +232,21 @@ void init_path_to_noi(int id_from, int trait) {
         double dummy;
         _graph.path_to_node(id_from, 0, _path.path,dummy);
     }
+    else if (trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_TSP)
+    {
+        ROS_INFO("Finding the shortest path through all objects and go back ");
+        
+        _path.path=tsp_traverse_all_objects();
+        
+    }
     else
         ROS_ERROR("Requested trait %d is not implemented yet.", trait);
-
-//    std::cout << "Path: ";
-//    for(int i = 0; i < _path.path.size(); ++i) {
-//        std::cout << _path.path[i] << " ";
-//    }
-//    std::cout << std::endl;
+    
+    //    std::cout << "Path: ";
+    //    for(int i = 0; i < _path.path.size(); ++i) {
+    //        std::cout << _path.path[i] << " ";
+    //    }
+    //    std::cout << std::endl;
 }
 
 bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
@@ -135,26 +254,27 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
 {
     if ( request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_UNKNOWN_DIR ||
          request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_OBJECT ||
-         request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_START )
+         request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_START ||
+         request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_TSP)
     {
-//        //if we haven't finished an existing path: advance a step
-//        if (_path.next < _path.path.size())
-//        {
-//            if (request.trait != _path.trait) {
-//                ROS_ERROR("Trait was changed during path following. Will service request anyway.");
-//                init_path_to_noi(request.id_from, request.trait);
-//            }
-//            if (request.id_from != _path.path[_path.next]) {
-//                ROS_ERROR("Last path was not completed. Will service request anyway.");
-//                init_path_to_noi(request.id_from, request.trait);
-//            }
-//        }
-//        else {
-//            init_path_to_noi(request.id_from, request.trait);
-//        }
-
+        //        //if we haven't finished an existing path: advance a step
+        //        if (_path.next < _path.path.size())
+        //        {
+        //            if (request.trait != _path.trait) {
+        //                ROS_ERROR("Trait was changed during path following. Will service request anyway.");
+        //                init_path_to_noi(request.id_from, request.trait);
+        //            }
+        //            if (request.id_from != _path.path[_path.next]) {
+        //                ROS_ERROR("Last path was not completed. Will service request anyway.");
+        //                init_path_to_noi(request.id_from, request.trait);
+        //            }
+        //        }
+        //        else {
+        //            init_path_to_noi(request.id_from, request.trait);
+        //        }
+        
         init_path_to_noi(request.id_from, request.trait);
-
+        
         response.path.path.clear();
         response.path.path.clear();
         response.path.path.reserve(_path.path.size());
@@ -166,107 +286,10 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
         ROS_ERROR("Requested trait %d is not implemented yet.", request.trait);
         return false;
     }
-
+    
     return true;
 }
 
-
-
-int factorial_cal(int n)
-{
- if (n==0) return 1;
- int fact=1;
- for (int i=1;i<=n;++i)
- {
-    fact=fact*i;
- }
- return fact;
-}
-
-void get_object_node_indexs(std::vector<int> &object_nodes)
-{
-    object_nodes.reserve(_graph.num_nodes());
-
-
-    for (int i=0; i< _graph.num_nodes();++i)
-    {
-        if (_graph.get_node(i).object_here)
-        {
-           object_nodes.push_back(_graph.get_node(i).id_this);
-        }
-    }
-   // std::cout<<object_nodes.size()<<std::endl;
-}
-
-void generate_all_permutations( std::vector<int>& object_nodes,std::vector<std::vector <int> >& perm)
-{
-    int i=0;
-    do {
-        perm[i][0]=_graph.get_node(0).id_this; // add start node
-        for (int j=0;j<object_nodes.size();++j)
-        {
-            perm[i][j+1]=object_nodes[j];
-        }
-        i=i+1;
-      } while ( std::next_permutation(object_nodes.begin(),object_nodes.end() ));
-}
-
-std::vector<int> find_shortest_path()
-{
-
-    std::vector<int> object_nodes;
-    std::vector<int> best_path;
-    get_object_node_indexs(object_nodes);
-    int perm_num=factorial_cal(object_nodes.size());
-    if (object_nodes.size()==0) {return std::vector<int>();}
-
-    std::vector<std::vector <int> > perm;
-    perm.resize(perm_num);
-    best_path.reserve(object_nodes.size()+2);
-    for (int i=0;i<perm_num;++i)
-    {
-        perm[i].resize(object_nodes.size()+1); //+1 for starting node
-    }
-
-    generate_all_permutations(object_nodes,perm);
-    double shortest=std::numeric_limits<double>::infinity();
-    int best_id =-1;
-    double dist=0;
-    // do iterations for all permutations
-    for (int i=0; i<perm_num;++i)
-    {
-     double dist_sum=0;
-     for (int j=0; j<object_nodes.size();++j)
-       {
-         _graph.path_to_node(perm[i][j], perm[i][j+1], _path.path,dist);
-         std::cout<<"from "<<perm[i][j]<<"to "<<perm[i][j+1]<<" dist"<<dist<<std::endl;
-        dist_sum=dist_sum+dist;
-       }
-
-      _graph.path_to_node(perm[i][object_nodes.size()-1], perm[i][0], _path.path,dist); // for the last object to the strating point
-      std::cout<<"going back dis  "<<dist<< std::endl;
-      dist_sum=dist_sum+dist;
-      std::cout<<dist_sum<<std::endl;
-      if (dist_sum<shortest)
-      {
-          best_id=i;
-          shortest=dist_sum;
-      }
-    }
-    if (best_id== -1)
-    {
-        std::cout<<"china"<<std::endl;
-        return std::vector<int>();
-     }
-    for (int i=0; i<object_nodes.size()+1;++i)
-    {
-
-        best_path.push_back(perm[best_id][i]);
-    }
-        best_path.push_back(_graph.get_node(0).id_this);
-    return best_path;
-
-}
 void test_request(int id_prev, int dir, bool blocked_n, bool blocked_e, bool blocked_s, bool blocked_w, navigation_msgs::PlaceNodeRequest& request)
 {
     request.id_previous = id_prev;
@@ -474,14 +497,15 @@ int main(int argc, char **argv)
 
     ros::Rate rate(10.0);
    ///////test
-  //  std::vector<Point> test_points;
-  //  test2_graph_build(test_points);
-  //  std::vector<int> best_path;
+   //std::vector<Point> test_points;
+   //test2_graph_build(test_points);
+   //std::vector<int> best_path;
+   //std::cout<<"banana"<<std::endl;
 
 
     while(n.ok())
     {
-        //test2_graph(test_points);
+       // test2_graph(test_points);
 
         float x = _position.x;
         float y = _position.y;
@@ -493,13 +517,13 @@ int main(int argc, char **argv)
 
         _graph_viz->draw();
 
-        //if (_test2_i >= test_points.size()) {
-        //best_path=find_shortest_path();
-            // for (int i=0; i<best_path.size();++i){
-             //  std::cout<<best_path[i]<< "->"<<std::endl;
-           //  }
+       //if (_test2_i >= test_points.size()) {
+       //     best_path=tsp_traverse_all_objects();
+       //      for (int i=0; i<best_path.size();++i){
+       //      std::cout<<best_path[i]<< "->"<<std::endl;
+       //     }
 
-        //}
+       // }
 
         ros::spinOnce();
         rate.sleep();
