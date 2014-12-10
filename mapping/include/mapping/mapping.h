@@ -67,14 +67,14 @@ private:
     Point<int> transformPointToGridSystem(const std::string &frame_id, double x, double y);
     Point<double> transformCellToMap(Point<int>& cell);
     void markProbabilityGrid(Point<int> cell, double log_prob);
-    void markSeenGrid(Point<int> cell, bool flag);
+    void markSeenGrid(Point<int> cell, int flag);
     void updateOccupancyGrid(Point<int>);
     void updateSeenVizGrid(Point<int>);
     bool isIRValid(double reading);
     void initProbabilityGrid();
     void initOccupancyGrid();
-    void updateWalls();
-    bool isObstacle(int x, int y);
+    void updateWalls(bool markOnHaveSeen);
+    bool isObstacle(int x, int y, bool inHaveSeen = false);
 
     ros::NodeHandle handle;
     ros::Subscriber distance_sub;
@@ -105,7 +105,7 @@ private:
     common::vision::SegmentedPlane::ArrayPtr wall_planes;
 
     vector<vector<double> > prob_grid;
-    vector<vector<bool> > seen_grid;
+    vector<vector<uint8_t> > seen_grid;
     nav_msgs::OccupancyGrid occupancy_grid;
     nav_msgs::OccupancyGrid seen_viz_grid;
 

@@ -78,7 +78,7 @@ void Mapping::updateGrid()
         updateIR(bl_ir_reading, -robot::ir::offset_rear_left_forward);
 
         if (use_planes())
-            updateWalls();
+            updateWalls(false);
     }
 
     updateHaveSeen();
@@ -125,7 +125,7 @@ void Mapping::markPointsBetween(Point<int> p0, Point<int> p1, double val, bool m
     Point<int> cell(p0.x,p0.y);
 
     if (markInSeen) {
-        markSeenGrid(cell, true);
+        markSeenGrid(cell, (int)val);
         updateSeenVizGrid(cell);
     }
     else {
@@ -145,10 +145,10 @@ void Mapping::markPointsBetween(Point<int> p0, Point<int> p1, double val, bool m
         }
 
         if (markInSeen) {
-            if (isObstacle(cell.x,cell.y))
+            if (isObstacle(cell.x,cell.y,false) || isObstacle(cell.x,cell.y,true))
                 break;
             else {
-                markSeenGrid(cell, true);
+                markSeenGrid(cell, (int)val);
                 updateSeenVizGrid(cell);
             }
         }
@@ -180,7 +180,7 @@ void Mapping::updateIR(double ir_reading, double ir_x_offset)
     }
 }
 
-void Mapping::updateWalls()
+void Mapping::updateWalls(bool markOnHaveSeen)
 {
     for(int i = 0; i < wall_planes->size(); ++i)
     {
@@ -194,6 +194,10 @@ void Mapping::updateWalls()
 
         //only consider walls that have a minimum width
         if(width < 0.2)
+            continue;
+
+        //and are close enough
+        if(std::abs(plane.get_coefficients()->values[3]) > 0.7)
             continue;
 
         //extract start and end position
@@ -210,7 +214,11 @@ void Mapping::updateWalls()
 
         Point<int> cell_p0 = robotPointToCell(Point<double>(p0(0),p0(1)));
         Point<int> cell_p1 = robotPointToCell(Point<double>(p1(0),p1(1)));
-        markPointsBetween(cell_p0, cell_p1, P_OCC);
+
+        if (markOnHaveSeen)
+            markPointsBetween(cell_p0,cell_p1,2,true);
+        else
+            markPointsBetween(cell_p0,cell_p1,P_OCC,false);
     }
 
 }
@@ -235,6 +243,8 @@ void rotatePoint(Point<int> p, Point<int> origin, double angle_rad, Point<int>& 
 
 void Mapping::updateHaveSeen()
 {
+    updateWalls(true);
+
     Point<int> origin = robotPointToCell(Point<double>(0,0));
     Point<int> end = robotPointToCell(Point<double>(frustum_dist(),0));
     Point<int> p1;
@@ -247,7 +257,7 @@ void Mapping::updateHaveSeen()
     for(double angle = angle0; angle < angle1; angle += dangle)
     {
         rotatePoint(end, origin, angle, p1);
-        markPointsBetween(origin, p1, 1.0, true);
+        markPointsBetween(origin, p1, 1, true);
     }
 }
 
@@ -320,7 +330,7 @@ Point<int> Mapping::mapPointToCell(Point<double> point)
     return Point<int>(x,y);
 }
 
-void Mapping::markSeenGrid(Point<int> cell, bool flag)
+void Mapping::markSeenGrid(Point<int> cell, int flag)
 {
     if (cell.y < 0 || cell.y >= seen_grid.size() ||
         cell.x < 0 || cell.x >= seen_grid[cell.y].size())
@@ -372,8 +382,11 @@ void Mapping::updateSeenVizGrid(Point<int> cell)
     }
 
     int pos = cell.x*GRID_WIDTH + cell.y;
-    if(seen_grid[cell.y][cell.x] == true)
+    int8_t flag = seen_grid[cell.y][cell.x];
+    if(flag == 1)
         seen_viz_grid.data[pos] = FREE;
+    else if (flag == 2)
+        seen_viz_grid.data[pos] = OCCUPIED;
     else
         seen_viz_grid.data[pos] = UNKNOWN;
 }
@@ -396,7 +409,7 @@ void Mapping::initProbabilityGrid()
 
     seen_grid.resize(GRID_HEIGHT);
     for(int i = 0; i < GRID_HEIGHT; ++i)
-        seen_grid[i].resize(GRID_WIDTH, false);
+        seen_grid[i].resize(GRID_WIDTH, 0);
 }
 
 void Mapping::initOccupancyGrid()
@@ -487,15 +500,21 @@ int main(int argc, char **argv)
     }
 }
 
-bool Mapping::isObstacle(int x, int y)
+bool Mapping::isObstacle(int x, int y, bool inHaveSeen)
 {
     if (y < 0 || y >= prob_grid.size())
         return false;
     if (x < 0 || x >= prob_grid[y].size())
         return false;
 
-    if(prob_grid[y][x] > FREE_OCCUPIED_THRESHOLD)
-        return true;
+    if (inHaveSeen) {
+        if(seen_grid[y][x] == 2)
+            return true;
+    }
+    else {
+        if(prob_grid[y][x] > FREE_OCCUPIED_THRESHOLD)
+            return true;
+    }
 }
 
 void addPointToList(std::vector<Point<int> >& list, int x, int y)
