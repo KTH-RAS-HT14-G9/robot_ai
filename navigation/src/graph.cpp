@@ -101,33 +101,30 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
     return success;
 }
 
-
-
-
 int factorial_cal(int n)
 {
- if (n==0) return 1;
- int fact=1;
- for (int i=1;i<=n;++i)
- {
-    fact=fact*i;
- }
- return fact;
+    if (n==0) return 1;
+    int fact=1;
+    for (int i=1;i<=n;++i)
+    {
+        fact=fact*i;
+    }
+    return fact;
 }
 
 void get_object_node_indexs(std::vector<int> &object_nodes)
 {
     object_nodes.reserve(_graph.num_nodes());
-
-
+    
+    
     for (int i=0; i< _graph.num_nodes();++i)
     {
         if (_graph.get_node(i).object_here)
         {
-           object_nodes.push_back(_graph.get_node(i).id_this);
+            object_nodes.push_back(_graph.get_node(i).id_this);
         }
     }
-   // std::cout<<object_nodes.size()<<std::endl;
+    // std::cout<<object_nodes.size()<<std::endl;
 }
 
 void generate_all_permutations( std::vector<int>& object_nodes,std::vector<std::vector <int> >& perm)
@@ -140,12 +137,12 @@ void generate_all_permutations( std::vector<int>& object_nodes,std::vector<std::
             perm[i][j+1]=object_nodes[j];
         }
         i=i+1;
-      } while ( std::next_permutation(object_nodes.begin(),object_nodes.end() ));
+    } while ( std::next_permutation(object_nodes.begin(),object_nodes.end() ));
 }
 
 std::vector<int> tsp_traverse_all_objects()
 {
-
+    
     std::vector<int> object_nodes;
     std::vector<int> best_path;
     std::vector<int> best_objects;
@@ -156,7 +153,7 @@ std::vector<int> tsp_traverse_all_objects()
         best_path.push_back(_graph.get_node(0).id_this);
         return best_path;
     }
-
+    
     std::vector<std::vector <int> > perm;
     perm.resize(perm_num);
     best_objects.reserve(object_nodes.size()+2);
@@ -165,7 +162,7 @@ std::vector<int> tsp_traverse_all_objects()
     {
         perm[i].resize(object_nodes.size()+1); //+1 for starting node
     }
-
+    
     generate_all_permutations(object_nodes,perm);
     double shortest=std::numeric_limits<double>::infinity();
     int best_id =-1;
@@ -180,7 +177,7 @@ std::vector<int> tsp_traverse_all_objects()
             std::cout<<"from "<<perm[i][j]<<"to "<<perm[i][j+1]<<" dist"<<dist<<std::endl;
             dist_sum=dist_sum+dist;
         }
-
+        
         _graph.path_to_node(perm[i][object_nodes.size()-1], perm[i][0], _path.path,dist); // for the last object to the strating point
         std::cout<<"going back dis  "<<dist<< std::endl;
         dist_sum=dist_sum+dist;
@@ -201,7 +198,7 @@ std::vector<int> tsp_traverse_all_objects()
         best_objects.push_back(perm[best_id][i]);
     }
     best_objects.push_back(_graph.get_node(0).id_this);
-
+    
     for (int i=0; i<best_objects.size()-1;++i)
     {
         std::vector <int > nodes_between;
@@ -213,14 +210,14 @@ std::vector<int> tsp_traverse_all_objects()
     }
     best_path.push_back(_graph.get_node(0).id_this);
     return best_path;
-
+    
 }
 
 void init_path_to_noi(int id_from, int trait) {
     _path.next = 0;
     _path.trait = trait;
     _path.path.clear();
-
+    
     if (trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_UNKNOWN_DIR) {
         ROS_INFO("Finding shortest path to next unkown location...");
         _graph.path_to_next_unknown(id_from, _path.path);
@@ -238,18 +235,18 @@ void init_path_to_noi(int id_from, int trait) {
     else if (trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_TSP)
     {
         ROS_INFO("Finding the shortest path through all objects and go back ");
-
+        
         _path.path=tsp_traverse_all_objects();
-
+        
     }
     else
         ROS_ERROR("Requested trait %d is not implemented yet.", trait);
-
-//    std::cout << "Path: ";
-//    for(int i = 0; i < _path.path.size(); ++i) {
-//        std::cout << _path.path[i] << " ";
-//    }
-//    std::cout << std::endl;
+    
+    //    std::cout << "Path: ";
+    //    for(int i = 0; i < _path.path.size(); ++i) {
+    //        std::cout << _path.path[i] << " ";
+    //    }
+    //    std::cout << std::endl;
 }
 
 bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
@@ -260,24 +257,24 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
          request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_START ||
          request.trait == navigation_msgs::NextNodeOfInterestRequest::TRAIT_TSP)
     {
-//        //if we haven't finished an existing path: advance a step
-//        if (_path.next < _path.path.size())
-//        {
-//            if (request.trait != _path.trait) {
-//                ROS_ERROR("Trait was changed during path following. Will service request anyway.");
-//                init_path_to_noi(request.id_from, request.trait);
-//            }
-//            if (request.id_from != _path.path[_path.next]) {
-//                ROS_ERROR("Last path was not completed. Will service request anyway.");
-//                init_path_to_noi(request.id_from, request.trait);
-//            }
-//        }
-//        else {
-//            init_path_to_noi(request.id_from, request.trait);
-//        }
-
+        //        //if we haven't finished an existing path: advance a step
+        //        if (_path.next < _path.path.size())
+        //        {
+        //            if (request.trait != _path.trait) {
+        //                ROS_ERROR("Trait was changed during path following. Will service request anyway.");
+        //                init_path_to_noi(request.id_from, request.trait);
+        //            }
+        //            if (request.id_from != _path.path[_path.next]) {
+        //                ROS_ERROR("Last path was not completed. Will service request anyway.");
+        //                init_path_to_noi(request.id_from, request.trait);
+        //            }
+        //        }
+        //        else {
+        //            init_path_to_noi(request.id_from, request.trait);
+        //        }
+        
         init_path_to_noi(request.id_from, request.trait);
-
+        
         response.path.path.clear();
         response.path.path.clear();
         response.path.path.reserve(_path.path.size());
@@ -289,7 +286,7 @@ bool service_next_noi(navigation_msgs::NextNodeOfInterestRequest& request,
         ROS_ERROR("Requested trait %d is not implemented yet.", request.trait);
         return false;
     }
-
+    
     return true;
 }
 
@@ -491,7 +488,7 @@ int main(int argc, char **argv)
 
     ros::Subscriber sub_odom = n.subscribe("/pose/odometry",10,callback_odometry);
 
-    ros::ServiceServer srv_place_ndoe = n.advertiseService("/navigation/graph/place_node",service_place_node);
+    ros::ServiceServer srv_place_node = n.advertiseService("/navigation/graph/place_node",service_place_node);
     ros::ServiceServer srv_next_noi = n.advertiseService("/navigation/graph/next_node_of_interest",service_next_noi);
 
     navigation_msgs::Node node;
