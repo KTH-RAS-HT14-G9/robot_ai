@@ -188,16 +188,14 @@ class FollowGraph(smach.State):
         rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
         return 'follow_graph'
 
-
-
 def get_angle_to(map_dir):
-    angle = 90.0 * ((current_direction - map_dir + 4) % 4)
+    angle = 90.0 * ((compass_direction - map_dir + 4) % 4)
     if angle == 270.0:
         return -90.0
     return angle
 
 def follow_path(trait):
-    path = next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, userdata.trait)).path
+    path = next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, trait)).path
     follow_path_pub.publish(path)
     goto_done[0] = False
     wait_for_flag(goto_done)
@@ -223,7 +221,6 @@ def robot_to_map_pos(x, y):
 
 def place_node(object_here):
     global current_node, walls_have_changed
-    walls_have_changed = False
     n = ObstacleHandler.north_blocked()
     e = ObstacleHandler.east_blocked()
     s = ObstacleHandler.south_blocked()
@@ -231,6 +228,8 @@ def place_node(object_here):
     response = place_node_service.call(PlaceNodeRequest(current_node.id_this, compass_direction, n, e, s, w, object_here, detected_object.type, detected_object.x, detected_object.y))
     if not object_here:
         current_node = response.generated_node
+        walls_have_changed = False
+
     rospy.loginfo("Placed node with id: %d, compass direction: %d.", current_node.id_this, compass_direction)
 
 def reset_node_detected():
@@ -292,16 +291,12 @@ def go_forward(should_go):
 
 def update_walls_changed(): 
     global walls_have_changed
-
-    if (dir_changed(RobotDirections.LEFT) or 
-            dir_changed(RobotDirections.RIGHT) or 
-            dir_changed(RobotDirections.FORWARD)):
+    if walls_changed_in_dir(RobotDirections.LEFT) or walls_changed_in_dir(RobotDirections.RIGHT):
         walls_have_changed = True 
 
-def dir_changed(robot_dir):
+def walls_changed_in_dir(robot_dir):
     node_blocked = current_node.edges[robot_to_map_dir(robot_dir, compass_direction)]==Node.BLOCKED
     blocked_now = ObstacleHandler.robot_dir_blocked(robot_dir)
-
     return node_blocked != blocked_now
 
 def goto_node(node):
