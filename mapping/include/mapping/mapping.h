@@ -24,6 +24,7 @@
 #include <navigation_msgs/UnexploredRegion.h>
 #include <common/marker_delegate.h>
 #include <navigation_msgs/TransformPoint.h>
+#include <fstream>
 
 using std::vector;
 
@@ -58,6 +59,9 @@ public:
                                     navigation_msgs::TransformPointResponse &response);
     bool transformToMap(navigation_msgs::TransformPointRequest &request, 
                                     navigation_msgs::TransformPointResponse &response);
+    void saveToFile(const std::string& file_name);
+    void recoverFromFile(const std::string& file_name);
+    void recoverAndRefreshOccGrid(const std::string& file_name);
 
 private:
 
