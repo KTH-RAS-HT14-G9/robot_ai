@@ -158,6 +158,57 @@ void ringbuffer_push(const ras_arduino_msgs::Encoders& encoders)
     _ringbuffer.push_back(encoders);
 }
 
+int get_compass()
+{
+    /**
+      * -1 -> S -> 2
+      *  0 -> E -> 1
+      *  1 -> N -> 0
+      *  2 -> W -> 3
+      */
+
+    switch(_heading+1) {
+    case 0: return 2;
+    case 1: return 1;
+    case 2: return 0;
+    case 3: return 3;
+    }
+
+    ROS_ERROR("[pose_generator::get_compass] Unexpected heading %d", _heading);
+    return -1;
+}
+
+void update_heading(double dTheta)
+{
+        std::stringstream ss;
+    //    ss << "Turning by angle: " << angle->data << ". Accum= " << _turn_accum << ", Heading= " << _heading;
+
+        _turn_accum += RAD2DEG(dTheta);
+
+        int prev_heading = _heading;
+
+        while (_turn_accum > 45.0) {
+            _turn_accum -= 90.0;
+            _heading++;
+            if (_heading >= 3) _heading -= 4;
+        }
+
+        while (_turn_accum < -45.0) {
+            _turn_accum += 90.0;
+            _heading--;
+            if (_heading <= -2) _heading += 4;
+        }
+
+        ss << "Corrected heading = " << _heading << ", new accum= " << _turn_accum << std::endl;
+        ROS_ERROR("%s",ss.str().c_str());
+
+        if (_heading != prev_heading) {
+            std_msgs::Int8 msg;
+            msg.data = get_compass();
+            _pub_compass.publish(msg);
+        }
+}
+
 /**
   * Adapter from http://simreal.com/content/Odometry
   */
@@ -173,7 +224,10 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
         double dist_l = c_l * (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder1 / robot::prop::ticks_per_rev);
         double dist_r = c_r * (2.0*M_PI*robot::dim::wheel_radius) * (-encoders->delta_encoder2 / robot::prop::ticks_per_rev);
 
-        _theta += (dist_r - dist_l) / robot::dim::wheel_distance;
+        double dTheta = (dist_r - dist_l) / robot::dim::wheel_distance;
+        update_heading(dTheta);
+
+        _theta += dTheta;
 
         double dist = (dist_r + dist_l) / 2.0;
 
@@ -194,26 +248,6 @@ void callback_encoders(const ras_arduino_msgs::EncodersConstPtr& encoders)
     pub_tf.sendTransform(tf::StampedTransform(transform, _odom.header.stamp, "map", "robot"));
 
     send_marker(transform);
-}
-
-int get_compass()
-{
-    /**
-      * -1 -> S -> 2
-      *  0 -> E -> 1
-      *  1 -> N -> 0
-      *  2 -> W -> 3
-      */
-
-    switch(_heading+1) {
-    case 0: return 2;
-    case 1: return 1;
-    case 2: return 0;
-    case 3: return 3;
-    }
-
-    ROS_ERROR("[pose_generator::get_compass] Unexpected heading %d", _heading);
-    return -1;
 }
 
 void connect_odometry_callback(const ros::SingleSubscriberPublisher& pub)
@@ -426,29 +460,7 @@ void callback_turn_done(const std_msgs::BoolConstPtr& done)
 
 void callback_turn_angle(const std_msgs::Float64ConstPtr& angle)
 {
-//    std::stringstream ss;
-//    ss << "Turning by angle: " << angle->data << ". Accum= " << _turn_accum << ", Heading= " << _heading;
 
-    _turn_accum += angle->data;
-
-    while (_turn_accum > 45.0) {
-        _turn_accum -= 90.0;
-        _heading++;
-        if (_heading >= 3) _heading -= 4;
-    }
-
-    while (_turn_accum < -45.0) {
-        _turn_accum += 90.0;
-        _heading--;
-        if (_heading <= -2) _heading += 4;
-    }
-
-//    ss << "\nCorrected heading = " << _heading << ", new accum= " << _turn_accum << std::endl;
-//    ROS_ERROR("%s",ss.str().c_str());
-
-    std_msgs::Int8 msg;
-    msg.data = get_compass();
-    _pub_compass.publish(msg);
 }
 
 double _avg_plane_dist;
