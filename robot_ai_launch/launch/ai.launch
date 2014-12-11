@@ -2,6 +2,9 @@
 
 	<node pkg="tf" type="static_transform_publisher" name="map_broadcaster" args="0 0 0 0 0 0 1 world map 100" />
 
+        <!-- Launch imu -->
+        <node pkg="imu" type="imu" name="imu" />
+
 	<!-- launch ir distance converter -->
 	<node pkg="ir_converter" type="ir_converter" name="ir_converter" />
 
@@ -11,8 +14,8 @@
 	<!-- launch mapping -->
 	<node pkg="mapping" type="mapping" name="mapping"/>
 
-	<!-- launch graph
-	<node pkg="navigation" type="graph" name="graph"/> -->
+	<!-- launch graph -->
+	<node pkg="navigation" type="graph" name="graph"/> 
 
 	<!-- launch brain -->
 	<node pkg="brain" type="brain.py" name="brain" output="screen"/>
