@@ -61,6 +61,7 @@ public:
                                     navigation_msgs::TransformPointResponse &response);
     void saveToFile(const std::string& file_name);
     void recoverFromFile(const std::string& file_name);
+    void recoverAndRefreshOccGrid(const std::string& file_name);
 
 private:
 

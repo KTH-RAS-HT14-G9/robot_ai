@@ -118,6 +118,21 @@ void Mapping::recoverFromFile(const std::string& file_name)
 	in.close();
 }
 
+void Mapping::recoverAndRefreshOccGrid(const std::string& file_name)
+{
+    recoverFromFile(file_name);
+    int i,j;
+    Point<int> point;
+    for (i=0; i<GRID_HEIGHT; i++) {
+        for (j=0; j<GRID_WIDTH; j++) {
+            point.x = i;
+            point.y = j;
+            if(prob_grid[j][i] != -0.693147)
+                updateOccupancyGrid(point);
+        }
+    }
+}
+
 void Mapping::updateGrid()
 {
     if(active) {
