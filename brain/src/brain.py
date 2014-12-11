@@ -12,6 +12,7 @@ from navigation_msgs.srv import *
 from ir_converter.msg import Distance
 from vision_msgs.msg import Object
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Point
 
 from direction_handler import *
 from obstacle_handler import ObstacleHandler
@@ -46,6 +47,7 @@ current_node.id_this = -1
 compass_direction = Node.EAST
 follow_graph_trait = NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR
 
+go_straight_pub = None
 goto_node_pub = None
 turn_pub = None
 follow_wall_pub = None
@@ -79,7 +81,7 @@ class Explore(smach.State):
     def execute(self, userdata):
         
         update_walls_changed()
-        if emercency_stop:
+        if emergency_stop:
             rospy.loginfo("EXPLORE ==> RECOVER_FROM_CRASH")
             return 'recover_from_crash'
         elif object_detected:
@@ -234,19 +236,20 @@ def get_close_to_object():
     if detected_object.x > RECOGNITION_DISTANCE:
         rospy.loginfo("Object is too far away, going closer.")
         obj = Node()
-        obj.x = robot_to_map_pos(detected_object.x - RECOGNITION_DISTANCE)
-        obj.y = robot_to_map_pos(0.0)
+        pos = robot_to_map_pos(detected_object.x - RECOGNITION_DISTANCE, 0.0)
+        obj.x = pos.x
+        obj.y = pos.y
         goto_node(obj)
 
 def robot_to_map_pos(x, y):     
     if compass_direction == Node.EAST:     
-        return Point(odometry.x + x, odometry.y + y)       
+        return Point(odometry.x + x, odometry.y + y, 0.0)
     if compass_direction == Node.NORTH:        
-        return Point(odometry.x - y, odometry.y + x)       
+        return Point(odometry.x - y, odometry.y + x, 0.0)
     if compass_direction == Node.WEST:     
-        return Point(odometry.x - x, odometry.y - y)       
+        return Point(odometry.x - x, odometry.y - y, 0.0)
     if compass_direction == Node.SOUTH:        
-        return Point(odometry.x + y, odometry.y - x) 
+        return Point(odometry.x + y, odometry.y - x, 0.0)
 
 def place_node(object_here):
     global current_node, walls_have_changed
@@ -393,26 +396,27 @@ def goto_done_callback(success):
 
 def odometry_callback(data):
     global odometry
-    odometry = data
+    odometry = data.pose.pose.position
     ObstacleHandler.odometry = data.pose.pose.position
 
 def compass_callback(direction):
     global compass_direction
     compass_direction = direction.data
-    ObstacleHandler.compass_direction = direction
+    ObstacleHandler.compass_direction = direction.data
 
 def check_for_interrupt():
     if rospy.is_shutdown():
         sys.exit(0)
 
 def crash_callback(time):
-    global emercency_stop
-    emercency_stop = True
+    global emergency_stop
+    emergency_stop = True
     rospy.logerr("Crash callback.")
     go_forward(False)
     follow_wall(False)
 
 def reset_flags():
+    global turn_done, goto_done, stop_done, object_detected, following_wall, going_forward, wals_have_changed, node_detected, emergency_stop
     turn_done = [False]
     goto_done = [False]
     stop_done = [False]
@@ -421,10 +425,11 @@ def reset_flags():
     going_forward = False
     walls_have_changed = True
     node_detected = False
-    emercency_stop = False
+    emergency_stop = False
 
 def main(argv):
-    global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, goto_node_pub, mapping_active_pub, follow_path_pub, recognize_object_pub, follow_graph_trait, speak_on_object, shake_pub
+    global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, goto_node_pub, mapping_active_pub, follow_path_pub, recognize_object_pub, go_straight_pub, follow_graph_trait, speak_on_object, shake_pub
+
     rospy.init_node('brain')
 
     sm = smach.StateMachine(outcomes=['finished'])
