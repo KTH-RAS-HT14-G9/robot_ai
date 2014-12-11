@@ -591,7 +591,7 @@ Point<double> Mapping::transformPointToMapSystem(std::string& frame_id, double x
     geometry_msgs::PointStamped stamped_out;
     tf_listener.transformPoint("map",stamped_in,stamped_out);
 
-    return Point<double>(stamped_out.point.x + MAP_X_OFFSET, stamped_out.point.y + MAP_Y_OFFSET);
+    return Point<double>(stamped_out.point.x, stamped_out.point.y);
 }
 
 Point<double> Mapping::transformCellToMap(Point<int>& cell)
