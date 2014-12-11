@@ -10,7 +10,7 @@ const double Mapping::MAP_Y_OFFSET = MAP_HEIGHT/2.0;
 
 const double Mapping::P_PRIOR = log(0.5);
 const double Mapping::P_OCC = log(0.7);
-const double Mapping::P_FREE  log(0.35);
+const double Mapping::P_FREE = log(0.35);
 
 const double Mapping::FREE_OCCUPIED_THRESHOLD = log(0.5);
 
@@ -711,7 +711,7 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
     }
 
     pub_viz.publish(markers_map.get());
-    markers_map.clear();
+//    markers_map.clear();
 
     return true;
 

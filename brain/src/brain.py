@@ -68,7 +68,7 @@ following_wall = False
 going_forward = False
 walls_have_changed = True
 node_detected = False
-emercency_stop = False
+emergency_stop = False
 speak_on_object = False
 
 class Explore(smach.State):

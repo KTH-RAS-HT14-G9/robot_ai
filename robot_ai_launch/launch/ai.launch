@@ -18,6 +18,6 @@
 	<node pkg="navigation" type="graph" name="graph"/> 
 
 	<!-- launch brain -->
-	<node pkg="brain" type="brain.py" name="brain" output="screen"/>
+        <node pkg="brain" type="brain.py" name="brain" args="p1" output="screen"/>
 
 </launch>
