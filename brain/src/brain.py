@@ -50,6 +50,7 @@ following_wall = False
 going_forward = False
 walls_have_changed = True
 node_detected = False
+emercency_stop = False
 
 class Explore(smach.State):
     def __init__(self):
@@ -59,10 +60,10 @@ class Explore(smach.State):
                                     output_keys=['trait'])
 
     def execute(self, userdata):
-        check_for_interrupt()
         follow_wall(True)
         go_forward(True)
         update_walls_changed()
+       # if crash..
         if object_detected:
             rospy.loginfo("EXPLORE ==> OBJECT_DETECTED")
             return 'object_detected'
@@ -70,7 +71,7 @@ class Explore(smach.State):
             userdata.trait = NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR
             rospy.loginfo("EXPLORE ==> FOLLOW_GRAPH")
             return 'follow_graph'
-        elif obstacle_ahead():
+        elif ObstacleHandler.obstacle_ahead():
             rospy.loginfo("EXPLORE ==> OBSTACLE_DETECTED")
             return 'obstacle_detected'        
         elif is_at_intersection():
@@ -88,9 +89,9 @@ class ObstacleDetected(smach.State):
             follow_wall(False)
             place_node(False)
 
-            if can_turn_left():
+            if ObstacleHandler.can_turn_left():
                 turn_left()
-            elif can_turn_right():
+            elif ObstacleHandler.can_turn_right():
                 turn_right()
             else:
                 turn_back()
@@ -139,6 +140,21 @@ class ObjectDetected(smach.State):
         rospy.loginfo("OBJECT_DETECTED ==> EXPLORE")
         return 'explore'
 
+class RecoverFromCrash(smach.State):
+    def __init__(self):
+        smach.State.__init__(self, outcomes=['explore'])
+
+    def execute(self, userdata):
+
+            go_forward(False)
+            follow_wall(False)
+
+
+            reset_flags()
+
+            rospy.loginfo("RECOVER_FROM_CRASH ==> EXPLORE")
+            return 'explore'
+
 class FollowGraph(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['explore', 'follow_graph'], 
@@ -171,6 +187,8 @@ class FollowGraph(smach.State):
 
         rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
         return 'follow_graph'
+
+
 
 def get_angle_to(map_dir):
     angle = 90.0 * ((current_direction - map_dir + 4) % 4)
@@ -229,7 +247,6 @@ def turn_right():
     turn(-90.0)
     reset_object_detection_mute()
 
-
 def turn_back():
     rospy.loginfo("Turning back.")
     turn(180.0)
@@ -275,16 +292,17 @@ def go_forward(should_go):
 
 def update_walls_changed(): 
     global walls_have_changed
-    if not (current_node.edges[robot_to_map_dir(RobotDirections.LEFT, compass_direction)]==Node.BLOCKED) == ObstacleHandler.robot_dir_blocked(RobotDirections.LEFT):
-        return
-        
-    if not (current_node.edges[robot_to_map_dir(RobotDirections.RIGHT, compass_direction)]==Node.BLOCKED) == ObstacleHandler.robot_dir_blocked(RobotDirections.RIGHT):
-        return
-    if not (current_node.edges[robot_to_map_dir(RobotDirections.FORWARD, compass_direction)]==Node.BLOCKED) == ObstacleHandler.robot_dir_blocked(RobotDirections.FORWARD):
-        walls_have_changed = True
 
-def walls_changed():
-    return walls_have_changed
+    if (dir_changed(RobotDirections.LEFT) or 
+            dir_changed(RobotDirections.RIGHT) or 
+            dir_changed(RobotDirections.FORWARD)):
+        walls_have_changed = True 
+
+def dir_changed(robot_dir):
+    node_blocked = current_node.edges[robot_to_map_dir(robot_dir, compass_direction)]==Node.BLOCKED
+    blocked_now = ObstacleHandler.robot_dir_blocked(robot_dir)
+
+    return node_blocked != blocked_now
 
 def goto_node(node):
     global goto_done
@@ -294,14 +312,14 @@ def goto_node(node):
     wait_for_flag(goto_done)
 
 def is_at_intersection(): 
-    if walls_changed() and not obstacle_ahead() and (can_turn_right() or can_turn_left()):
+    if walls_have_changed and not ObstacleHandler.obstacle_ahead() and (ObstacleHandler.can_turn_right() or ObstacleHandler.can_turn_left()):
             return True
     return False
 
 def turn_done_callback(data):
     global turn_done
     turn_done[0] = True
-    rospy.loginfo("Turn done callback.")
+    rospy.loginfo("Turn done callback.") 
 
 def stopping_done_callback(data):
     global stop_done
@@ -340,6 +358,8 @@ def goto_done_callback(success):
 def odometry_callback(data):
     global odometry
     odometry = data
+    ObstacleHandler.odometry = data.pose.pose.position
+
 
 def compass_callback(direction):
     global compass_direction
@@ -349,6 +369,23 @@ def compass_callback(direction):
 def check_for_interrupt():
     if rospy.is_shutdown():
         sys.exit(0)
+
+def crash_callback(time):
+    global emercency_stop
+    emercency_stop = True
+    go_forward(False)
+    follow_wall(False)
+
+def reset_flags():
+    turn_done = [False]
+    goto_done = [False]
+    stop_done = [False]
+    object_detected = False
+    following_wall = False
+    going_forward = False
+    walls_have_changed = True
+    node_detected = False
+    emercency_stop = False
 
 def main(argv):
     global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, goto_node_pub, mapping_active_pub, follow_path_pub, recognize_object_pub
@@ -363,6 +400,13 @@ def main(argv):
     rospy.Subscriber("/pose/odometry", Odometry, odometry_callback)
     rospy.Subscriber("/pose/compass", Int8, compass_callback)
     rospy.Subscriber("/controller/goto/success", Bool, goto_done_callback)
+    rospy.Subscriber("/perception/imu/peak", Time, crash_callback)
+
+    rospy.wait_for_service('/mapping/transform_to_map')
+    tomap = rospy.ServiceProxy('//mapping/transform_to_map', navigation_msgs.srv.TransformPoint)
+
+    rospy.wait_for_service('/mapping/transform_to_robot')
+    torobot = rospy.ServiceProxy('//mapping/transform_to_robot', navigation_msgs.srv.TransformPoint)
 
     turn_pub = rospy.Publisher("/controller/turn/angle", Float64, queue_size=10)
     follow_wall_pub = rospy.Publisher("/controller/wall_follow/active", Bool, queue_size=10)
@@ -379,7 +423,7 @@ def main(argv):
         smach.StateMachine.add('OBJECT_DETECTED', ObjectDetected(), transitions={'explore': 'EXPLORE'})
         smach.StateMachine.add('FOLLOW_GRAPH', FollowGraph(), transitions={'explore' : 'EXPLORE',
             'follow_graph' : 'FOLLOW_GRAPH'})
-
+    
     rospy.wait_for_service('/navigation/graph/place_node')
     rospy.wait_for_service('/navigation/graph/next_node_of_interest')
     place_node_service = rospy.ServiceProxy('/navigation/graph/place_node', navigation_msgs.srv.PlaceNode)

@@ -4,6 +4,7 @@ import rospy
 from ir_converter.msg import Distance
 from navigation_msgs.srv import *
 from navigation_msgs.msg import *
+from nav_msgs.msg import Odometry
 from direction_handler import *
 
 SIDE_BLOCKED_THRESHOLD = 0.35
@@ -11,17 +12,23 @@ FRONT_BLOCKED_THRESHOLD = 0.25
 ROBOT_DIAMETER = 0.25
 fit_blob_service = None
 
-compass_direction = Node.EAST
-distance = Distance()
-
 class ObstacleHandler:
 
+    compass_direction = Node.EAST
+    distance = Distance()
+    odometry = None
+
+    rospy.wait_for_service('/mapping/has_unexplored_region')
+    has_unexplored_region_service = rospy.ServiceProxy('/mapping/has_unexplored_region', navigation_msgs.srv.UnexploredRegion)
     rospy.wait_for_service('/mapping/fitblob')
     fit_blob_service = rospy.ServiceProxy('/mapping/fitblob', navigation_msgs.srv.FitBlob)
+    rospy.wait_for_service('/mapping/transform_to_map')
+    transform_service = rospy.ServiceProxy('/mapping/transform_to_map', navigation_msgs.srv.TransformPoint)
+
 
     @staticmethod
     def map_dir_blocked(map_dir):
-    	return ObstacleHandler.robot_dir_blocked(map_to_robot_dir(map_dir, compass_direction))
+        return ObstacleHandler.robot_dir_blocked(map_to_robot_dir(map_dir, ObstacleHandler.compass_direction))
 
     @staticmethod
     def robot_dir_blocked(robot_dir):
@@ -36,36 +43,49 @@ class ObstacleHandler:
     
     @staticmethod
     def north_blocked():
-        return ObstacleHandler.map_dir_blocked(Node.NORTH)
-
-    @staticmethod
-    def west_blocked():
-        return ObstacleHandler.map_dir_blocked(Node.WEST)
-
-    @staticmethod
-    def south_blocked():
-        return ObstacleHandler.map_dir_blocked(Node.SOUTH)
+        #print >> sys.stderr, ObstacleHandler.odometry
+        if ObstacleHandler.map_dir_blocked(Node.NORTH):
+            return True
+        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x, ObstacleHandler.odometry.y+ROBOT_DIAMETER-0.03, 0.08, 0.05, 0.5))
+        return not response.has_unexplored
 
     @staticmethod
     def east_blocked():
-        return ObstacleHandler.map_dir_blocked(Node.EAST)
+        if ObstacleHandler.map_dir_blocked(Node.EAST):
+            return True
+        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x+ROBOT_DIAMETER-0.03, ObstacleHandler.odometry.y, 0.08, 0.05, 0.5))
+        return not response.has_unexplored
+
+    @staticmethod
+    def south_blocked():
+        if ObstacleHandler.map_dir_blocked(Node.SOUTH):
+            return True
+        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x, ObstacleHandler.odometry.y-(ROBOT_DIAMETER-0.03), 0.08, 0.05, 0.5))
+        return not response.has_unexplored
+
+    @staticmethod
+    def west_blocked():
+        if ObstacleHandler.map_dir_blocked(Node.WEST):
+            return True
+        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x-(ROBOT_DIAMETER-0.03), ObstacleHandler.odometry.y, 0.08, 0.05, 0.5))
+        return not response.has_unexplored
 
     @staticmethod
     def can_turn_left():
-        return True if distance.fl_side > SIDE_BLOCKED_THRESHOLD and distance.bl_side > SIDE_BLOCKED_THRESHOLD else False
+        return True if ObstacleHandler.distance.fl_side > SIDE_BLOCKED_THRESHOLD and ObstacleHandler.distance.bl_side > SIDE_BLOCKED_THRESHOLD else False
 
     @staticmethod
     def can_turn_right():
-        return True if distance.fr_side > SIDE_BLOCKED_THRESHOLD and distance.br_side > SIDE_BLOCKED_THRESHOLD else False
+        return True if ObstacleHandler.distance.fr_side > SIDE_BLOCKED_THRESHOLD and ObstacleHandler.distance.br_side > SIDE_BLOCKED_THRESHOLD else False
 
     @staticmethod
     def obstacle_ahead():
-        return True if distance.l_front < FRONT_BLOCKED_THRESHOLD or distance.r_front < FRONT_BLOCKED_THRESHOLD else False
+        return True if ObstacleHandler.distance.l_front < FRONT_BLOCKED_THRESHOLD or ObstacleHandler.distance.r_front < FRONT_BLOCKED_THRESHOLD else False
 
     @staticmethod
     def obstacle_behind():
-        response = fit_blob_service.call(FitBlobRequest("robot", -ROBOT_DIAMETER+0.03, 0.0, 0.08, 0.05))
+        response = ObstacleHandler.fit_blob_service.call(FitBlobRequest("robot", -ROBOT_DIAMETER+0.03, 0.0, 0.08, 0.05))
         return not response.fits
 
         
-    	
+        
