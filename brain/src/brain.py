@@ -56,14 +56,17 @@ class Explore(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=
                                     ['explore','obstacle_detected', 
-                                    'object_detected', 'follow_graph'], 
+                                    'object_detected', 'follow_graph', 
+                                    'recover_from_crash'], 
                                     output_keys=['trait'])
 
     def execute(self, userdata):
         follow_wall(True)
         go_forward(True)
         update_walls_changed()
-       # if crash..
+        if emercency_stop:
+            rospy.loginfo("EXPLORE ==> RECOVER_FROM_CRASH")
+            return 'recover_from_crash'
         if object_detected:
             rospy.loginfo("EXPLORE ==> OBJECT_DETECTED")
             return 'object_detected'
@@ -75,7 +78,7 @@ class Explore(smach.State):
             rospy.loginfo("EXPLORE ==> OBSTACLE_DETECTED")
             return 'obstacle_detected'        
         elif is_at_intersection():
-            rospy.loginfo("Intersection detected, placing node")
+            #rospy.loginfo("Intersection detected, placing node")
             place_node(False)
         return 'explore'    
 
@@ -148,7 +151,12 @@ class RecoverFromCrash(smach.State):
 
             go_forward(False)
             follow_wall(False)
+            reset_flags()
 
+            go_straight(-0.2)
+            rospy.sleep(1.0)
+            goto_node(current_node)
+            turn_to_unexplored_edge()
 
             reset_flags()
 
@@ -175,18 +183,22 @@ class FollowGraph(smach.State):
         reset_node_detected()
 
         if userdata.trait == NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR:
-            rospy.loginfo("Turning to unexplored edge.")
-            if current_node.edges[Node.NORTH] == Node.UNKNOWN:
-                turn(get_angle_to(Node.NORTH))
-            elif current_node.edges[Node.EAST] == Node.UNKNOWN:
-                turn(get_angle_to(Node.EAST))
-            elif current_node.edges[Node.SOUTH] == Node.UNKNOWN:
-                turn(get_angle_to(Node.SOUTH))
-            elif current_node.edges[Node.WEST] == Node.UNKNOWN:
-                turn(get_angle_to(Node.WEST))
+            turn_to_unexplored_edge()
 
         rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
         return 'follow_graph'
+
+
+def turn_to_unexplored_edge():
+    rospy.loginfo("Turning to unexplored edge.")
+    if current_node.edges[Node.NORTH] == Node.UNKNOWN:
+        turn(get_angle_to(Node.NORTH))
+    elif current_node.edges[Node.EAST] == Node.UNKNOWN:
+        turn(get_angle_to(Node.EAST))
+    elif current_node.edges[Node.SOUTH] == Node.UNKNOWN:
+        turn(get_angle_to(Node.SOUTH))
+    elif current_node.edges[Node.WEST] == Node.UNKNOWN:
+        turn(get_angle_to(Node.WEST))
 
 def get_angle_to(map_dir):
     angle = 90.0 * ((compass_direction - map_dir + 4) % 4)
@@ -226,11 +238,12 @@ def place_node(object_here):
     s = ObstacleHandler.south_blocked()
     w = ObstacleHandler.west_blocked()
     response = place_node_service.call(PlaceNodeRequest(current_node.id_this, compass_direction, n, e, s, w, object_here, detected_object.type, detected_object.x, detected_object.y))
-    if not object_here:
-        current_node = response.generated_node
-        walls_have_changed = False
-
-    rospy.loginfo("Placed node with id: %d, compass direction: %d.", current_node.id_this, compass_direction)
+    
+    if response.generated_node.id_this != current_node.id_this:
+        rospy.loginfo("Placed node with id: %d, object: %s.", response.generated_node.id_this, str(response.generated_node.object_here))
+        if not object_here:
+            current_node = response.generated_node
+            walls_have_changed = False
 
 def reset_node_detected():
     global node_detected
@@ -262,7 +275,6 @@ def turn(angle):
     turn_done[0] = False
     turn_pub.publish(angle)
     wait_for_flag(turn_done)
-    rospy.loginfo("turn done")
     rospy.sleep(0.5) # for aligning
 
 def wait_for_flag(flag):
@@ -286,6 +298,7 @@ def go_forward(should_go):
         going_forward = should_go
         stop_done[0] = False
         go_forward_pub.publish(should_go)
+        rospy.loginfo("Go forward: %s", str(should_go))
         if not should_go:
             wait_for_flag(stop_done)
 
@@ -304,6 +317,13 @@ def goto_node(node):
     goto_done[0] = False
     rospy.loginfo("Going to node: %d.", node.id_this)
     goto_node_pub.publish(node)
+    wait_for_flag(goto_done)
+
+def go_straight(distance):
+    global goto_done
+    goto_done[0] = False
+    rospy.loginfo("Going straight %d meters.", distance)
+    go_straight_pub.publish(distance)
     wait_for_flag(goto_done)
 
 def is_at_intersection(): 
@@ -368,6 +388,7 @@ def check_for_interrupt():
 def crash_callback(time):
     global emercency_stop
     emercency_stop = True
+    rospy.logerr("Crash callback.")
     go_forward(False)
     follow_wall(False)
 
@@ -410,14 +431,16 @@ def main(argv):
     follow_path_pub = rospy.Publisher("/controller/goto/follow_path", Path, queue_size=1)
     mapping_active_pub = rospy.Publisher("/mapping/active", Bool, queue_size=1)
     recognize_object_pub = rospy.Publisher("/vision/recognize_now", Empty, queue_size=1)
+    go_straight_pub = rospy.Publisher("controller/goto/straight", Float64, queue_size=1)
 
     with sm:
         smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
-            'object_detected' : 'OBJECT_DETECTED'})
+            'object_detected' : 'OBJECT_DETECTED', 'recover_from_crash':'RECOVER_FROM_CRASH'})
         smach.StateMachine.add('OBSTACLE_DETECTED', ObstacleDetected(), transitions={'explore': 'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED'})
         smach.StateMachine.add('OBJECT_DETECTED', ObjectDetected(), transitions={'explore': 'EXPLORE'})
         smach.StateMachine.add('FOLLOW_GRAPH', FollowGraph(), transitions={'explore' : 'EXPLORE',
             'follow_graph' : 'FOLLOW_GRAPH'})
+        smach.StateMachine.add("RECOVER_FROM_CRASH", RecoverFromCrash(), transitions={'explore':'EXPLORE'})
     
     rospy.wait_for_service('/navigation/graph/place_node')
     rospy.wait_for_service('/navigation/graph/next_node_of_interest')
