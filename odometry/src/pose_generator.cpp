@@ -199,8 +199,8 @@ void update_heading(double dTheta)
             if (_heading <= -2) _heading += 4;
         }
 
-        ss << "Corrected heading = " << _heading << ", new accum= " << _turn_accum << std::endl;
-        ROS_ERROR("%s",ss.str().c_str());
+//        ss << "Corrected heading = " << _heading << ", new accum= " << _turn_accum << std::endl;
+//        ROS_ERROR("%s",ss.str().c_str());
 
         if (_heading != prev_heading) {
             std_msgs::Int8 msg;
