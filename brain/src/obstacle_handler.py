@@ -8,9 +8,11 @@ from nav_msgs.msg import Odometry
 from direction_handler import *
 
 SIDE_BLOCKED_THRESHOLD = 0.35
-FRONT_BLOCKED_THRESHOLD = 0.25
+FRONT_BLOCKED_THRESHOLD = 0.22
 ROBOT_DIAMETER = 0.25
 fit_blob_service = None
+MAX_OCCLUSION = 0.1
+MIN_UNSEEN = 0.3
 
 class ObstacleHandler:
 
@@ -22,9 +24,6 @@ class ObstacleHandler:
     has_unexplored_region_service = rospy.ServiceProxy('/mapping/has_unexplored_region', navigation_msgs.srv.UnexploredRegion)
     rospy.wait_for_service('/mapping/fitblob')
     fit_blob_service = rospy.ServiceProxy('/mapping/fitblob', navigation_msgs.srv.FitBlob)
-    rospy.wait_for_service('/mapping/transform_to_map')
-    transform_service = rospy.ServiceProxy('/mapping/transform_to_map', navigation_msgs.srv.TransformPoint)
-
 
     @staticmethod
     def map_dir_blocked(map_dir):
@@ -46,36 +45,32 @@ class ObstacleHandler:
         #print >> sys.stderr, ObstacleHandler.odometry
         if ObstacleHandler.map_dir_blocked(Node.NORTH):
             return True
-        return False
         
-        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x, ObstacleHandler.odometry.y+ROBOT_DIAMETER-0.03, 0.08, 0.05, 0.5))
+        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x, ObstacleHandler.odometry.y+ROBOT_DIAMETER-0.03, 0.08, MAX_OCCLUSION, MIN_UNSEEN))
         return not response.has_unexplored
 
     @staticmethod
     def east_blocked():
         if ObstacleHandler.map_dir_blocked(Node.EAST):
             return True
-        return False
 
-        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x+ROBOT_DIAMETER-0.03, ObstacleHandler.odometry.y, 0.08, 0.05, 0.5))
+        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x+ROBOT_DIAMETER-0.03, ObstacleHandler.odometry.y, 0.08, MAX_OCCLUSION, MIN_UNSEEN))
         return not response.has_unexplored
 
     @staticmethod
     def south_blocked():
         if ObstacleHandler.map_dir_blocked(Node.SOUTH):
             return True
-        return False
 
-        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x, ObstacleHandler.odometry.y-(ROBOT_DIAMETER-0.03), 0.08, 0.05, 0.5))
+        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x, ObstacleHandler.odometry.y-(ROBOT_DIAMETER-0.03), 0.08, MAX_OCCLUSION, MIN_UNSEEN))
         return not response.has_unexplored
 
     @staticmethod
     def west_blocked():
         if ObstacleHandler.map_dir_blocked(Node.WEST):
             return True
-        return False
 
-        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x-(ROBOT_DIAMETER-0.03), ObstacleHandler.odometry.y, 0.08, 0.05, 0.5))
+        response = ObstacleHandler.has_unexplored_region_service.call(UnexploredRegionRequest("map", ObstacleHandler.odometry.x-(ROBOT_DIAMETER-0.03), ObstacleHandler.odometry.y, 0.08, MAX_OCCLUSION, MIN_UNSEEN))
         return not response.has_unexplored
 
     @staticmethod
@@ -88,6 +83,8 @@ class ObstacleHandler:
 
     @staticmethod
     def obstacle_ahead():
+        if ObstacleHandler.distance.l_front < FRONT_BLOCKED_THRESHOLD or ObstacleHandler.distance.r_front < FRONT_BLOCKED_THRESHOLD:
+            print("OBSTACLE", ObstacleHandler.distance)
         return True if ObstacleHandler.distance.l_front < FRONT_BLOCKED_THRESHOLD or ObstacleHandler.distance.r_front < FRONT_BLOCKED_THRESHOLD else False
 
     @staticmethod
