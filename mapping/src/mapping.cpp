@@ -745,6 +745,11 @@ bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, naviga
         }
     }
 
+    if (num_cells == 0) {
+        response.fits = false;
+        return true;
+    }
+
     response.fits = ((double)num_occluded/(double)num_cells) < request.max_occlusion_ratio;
 
     return true;
@@ -789,6 +794,10 @@ bool Mapping::serviceHasUnexploredRegion(navigation_msgs::UnexploredRegionReques
     }
 
     response.has_unexplored = false;
+
+    if (num_cells == 0)
+        return true;
+
     double occlusion_ratio = ((double)num_occluded/(double)num_cells);
     if (occlusion_ratio < request.max_occlusion_ratio)
     {
@@ -796,4 +805,6 @@ bool Mapping::serviceHasUnexploredRegion(navigation_msgs::UnexploredRegionReques
 
         response.has_unexplored = unexplored_ratio > request.min_notseen_ratio;
     }
+
+    return true;
 }
