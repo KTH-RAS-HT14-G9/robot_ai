@@ -88,6 +88,36 @@ bool Mapping::transformToMap(navigation_msgs::TransformPointRequest &request, na
     return true;
 }
 
+void Mapping::saveToFile(const std::string& file_name)
+{
+	std::ofstream out;
+	out.open(file_name.c_str());
+	int i,j;
+	for (i=0; i<GRID_HEIGHT; i++)
+	{
+		for (j=0; j<GRID_WIDTH; j++)
+		{
+			out << prob_grid[i][j] << "\n";
+		}
+	}
+	out.close();
+}
+
+void Mapping::recoverFromFile(const std::string& file_name)
+{
+	std::ifstream in;
+	in.open(file_name.c_str());
+	int i,j;
+	for (i=0; i<GRID_HEIGHT; i++)
+	{
+		for (j=0; j<GRID_WIDTH; j++)
+		{
+			in >> prob_grid[i][j];
+		}
+	}
+	in.close();
+}
+
 void Mapping::updateGrid()
 {
     if(active) {
