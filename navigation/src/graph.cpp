@@ -492,8 +492,12 @@ int main(int argc, char **argv)
 
     bool p2 = false;
 
-    if (argc == 2)
-        p2 = true;
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "p2")==0) {
+            p2 = true;
+            break;
+        }
+    }
 
     _path.next = 0;
 
@@ -508,7 +512,6 @@ int main(int argc, char **argv)
     ros::Subscriber sub_save = n.subscribe("/save",10,callback_save);
     ros::Subscriber sub_graph;
     if (p2) {
-        ROS_ERROR("P2");
         sub_graph = n.subscribe("/graph/save",10,callback_load);
     }
 
