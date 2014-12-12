@@ -27,6 +27,7 @@ private:
     common::LowPassFilter _filter_l, _filter_r;
 
     Parameter<double> _lowpass_inertia;
+    Parameter<double> _lowpass_inertia_front;
 
 };
 
