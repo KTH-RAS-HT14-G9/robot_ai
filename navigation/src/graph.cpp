@@ -101,11 +101,11 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
 
     if (request.object_here == true) {
 
-        //if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
+        if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
         {
             _graph.place_object(response.generated_node.id_this, request);
         }
-        //else success = false;
+        else success = false;
     }
 
     return success;
