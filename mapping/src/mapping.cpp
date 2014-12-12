@@ -73,10 +73,6 @@ Mapping::Mapping() :
 
     initProbabilityGrid();
     initOccupancyGrid();
-    
-    struct stat buffer;   
-  	if (stat (MAP_NAME.c_str(), &buffer) == 0)
-  		recoverAndRefreshOccGrid(MAP_NAME);
 }
 
 bool Mapping::transformToRobot(navigation_msgs::TransformPointRequest &request, navigation_msgs::TransformPointResponse &response)
@@ -538,6 +534,13 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "mapping");
     Mapping mapping;
+    //int size = argv.size();
+    int i;
+    for(i=0; i<argc; i++) {
+    	if(strcmp(argv[i],"p2") == 0)
+    		mapping.recoverAndRefreshOccGrid(mapping.MAP_NAME);
+    }
+
     ros::Rate loop_rate(20);
 
     int counter = 0;
