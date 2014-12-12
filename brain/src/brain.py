@@ -59,6 +59,7 @@ speak_pub = None
 shake_pub = None
 place_node_service = None
 next_noi_service = None
+transform_to_map_service = None
 
 turn_done = [False] # In array so it can be passed by reference
 goto_done = [False]
@@ -237,19 +238,12 @@ def get_close_to_object():
         rospy.loginfo("Object is too far away, going closer.")
         obj = Node()
         pos = robot_to_map_pos(detected_object.x - RECOGNITION_DISTANCE, 0.0)
-        obj.x = pos.x
-        obj.y = pos.y
+        response = transform_to_map_service.call(detected_object.x, detected_object.y, "robot", "map")
+        obj.x = response.x
+        obj.y = response.y
         goto_node(obj)
-
-def robot_to_map_pos(x, y):     
-    if compass_direction == Node.EAST:     
-        return Point(odometry.x + x, odometry.y + y, 0.0)
-    if compass_direction == Node.NORTH:        
-        return Point(odometry.x - y, odometry.y + x, 0.0)
-    if compass_direction == Node.WEST:     
-        return Point(odometry.x - x, odometry.y - y, 0.0)
-    if compass_direction == Node.SOUTH:        
-        return Point(odometry.x + y, odometry.y - x, 0.0)
+    else:
+        rospy.loginfo("Object close enough, X=%f", detected_object.x)
 
 def place_node(object_here):
     global current_node, walls_have_changed
@@ -428,9 +422,9 @@ def reset_flags():
     emergency_stop = False
 
 def main(argv):
-    global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, goto_node_pub, mapping_active_pub, follow_path_pub, recognize_object_pub, go_straight_pub, follow_graph_trait, speak_on_object, shake_pub
+    global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, goto_node_pub, mapping_active_pub, follow_path_pub, recognize_object_pub, go_straight_pub, follow_graph_trait, speak_on_object, shake_pub, transform_to_map_service
     rospy.init_node('brain')
-    
+
     sm = smach.StateMachine(outcomes=['finished'])
     rospy.Subscriber("/perception/ir/distance", Distance, ir_callback)
     rospy.Subscriber("/controller/turn/done", Bool, turn_done_callback)
@@ -451,7 +445,7 @@ def main(argv):
     recognize_object_pub = rospy.Publisher("/vision/recognize_now", Empty, queue_size=1)
     go_straight_pub = rospy.Publisher("controller/goto/straight", Float64, queue_size=1)
     speak_pub = rospy.Publisher("/espeak/string", String, queue_size=1)
-    shake_pub = rospy.Publisher("/goto/shake", Float32, queue_size=1)
+    shake_pub = rospy.Publisher("/controller/goto/shake", Float64, queue_size=1)
 
     with sm:
         smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
@@ -462,8 +456,10 @@ def main(argv):
             'follow_graph' : 'FOLLOW_GRAPH'})
         smach.StateMachine.add("RECOVER_FROM_CRASH", RecoverFromCrash(), transitions={'explore':'EXPLORE'})
     
+    rospy.wait_for_service('/mapping/has_unexplored_region')
     rospy.wait_for_service('/navigation/graph/place_node')
     rospy.wait_for_service('/navigation/graph/next_node_of_interest')
+    transform_to_map_service = rospy.ServiceProxy('/mapping/transform_to_map', navigation_msgs.srv.TransformPoint)
     place_node_service = rospy.ServiceProxy('/navigation/graph/place_node', navigation_msgs.srv.PlaceNode)
     next_noi_service = rospy.ServiceProxy('/navigation/graph/next_node_of_interest', navigation_msgs.srv.NextNodeOfInterest)
 
