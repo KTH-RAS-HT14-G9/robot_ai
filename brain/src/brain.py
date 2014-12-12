@@ -63,11 +63,11 @@ next_noi_service = None
 turn_done = [False] # In array so it can be passed by reference
 goto_done = [False]
 stop_done = [False]
+node_detected = [False]
 object_detected = False
 following_wall = False
 going_forward = False
 walls_have_changed = True
-node_detected = False
 emergency_stop = False
 speak_on_object = False
 
@@ -87,7 +87,7 @@ class Explore(smach.State):
         elif object_detected:
             rospy.loginfo("EXPLORE ==> OBJECT_DETECTED")
             return 'object_detected'
-        elif node_detected:
+        elif node_detected[0]:
             rospy.loginfo("EXPLORE ==> FOLLOW_GRAPH")
             return 'follow_graph'
         elif ObstacleHandler.obstacle_ahead():
@@ -267,7 +267,7 @@ def place_node(object_here):
 
 def reset_node_detected():
     global node_detected
-    node_detected = False
+    node_detected[0] = False
 
 def turn_left():
     rospy.loginfo("Turning left.")
@@ -383,7 +383,7 @@ def on_node_callback(node):
     if(current_node.id_this != node.id_this):
         rospy.loginfo("On node callback. Previous node: %d, New node: %d.", current_node.id_this, node.id_this)
         current_node = node
-        node_detected = True
+        node_detected[0] = True
         if node.object_here and speak_on_object:
             fetch_string = "I have fetched" + OBJECTS[node.object_type]
             rospy.loginfo("%s (%d).", fetch_string, node.object_type)
@@ -424,14 +424,13 @@ def reset_flags():
     following_wall = False
     going_forward = False
     walls_have_changed = True
-    node_detected = False
+    node_detected = [False]
     emergency_stop = False
 
 def main(argv):
     global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, goto_node_pub, mapping_active_pub, follow_path_pub, recognize_object_pub, go_straight_pub, follow_graph_trait, speak_on_object, shake_pub
-
     rospy.init_node('brain')
-
+    
     sm = smach.StateMachine(outcomes=['finished'])
     rospy.Subscriber("/perception/ir/distance", Distance, ir_callback)
     rospy.Subscriber("/controller/turn/done", Bool, turn_done_callback)
