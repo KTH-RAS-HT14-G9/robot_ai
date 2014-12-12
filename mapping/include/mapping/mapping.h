@@ -46,6 +46,7 @@ public:
     void odometryCallback(const nav_msgs::Odometry::ConstPtr&);
     void wallDetectedCallback(const vision_msgs::Planes::ConstPtr&);
     void activateUpdateCallback(const std_msgs::Bool::ConstPtr&);
+    void saveMapCallback(const std_msgs::Empty::ConstPtr&);
     bool performRaycast(navigation_msgs::RaycastRequest &request,
                         navigation_msgs::RaycastResponse &response);
     bool serviceFitRequest(navigation_msgs::FitBlobRequest& request,
@@ -94,6 +95,7 @@ private:
     ros::Subscriber wall_sub;
     ros::Subscriber object_sub;
     ros::Subscriber active_sub;
+    ros::Subscriber map_save;
 
     ros::Publisher map_pub;
     ros::Publisher seen_pub;
@@ -133,6 +135,7 @@ private:
     static const double MAP_X_OFFSET, MAP_Y_OFFSET;
     static const double P_PRIOR, P_OCC, P_FREE;
     static const double FREE_OCCUPIED_THRESHOLD;
+    static const std::string MAP_NAME;
 
     static const double MAX_IR_DIST, MIN_IR_DIST;
 
