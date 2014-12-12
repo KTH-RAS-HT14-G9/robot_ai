@@ -64,6 +64,8 @@ public:
     void recoverFromFile(const std::string& file_name);
     void recoverAndRefreshOccGrid(const std::string& file_name);
 
+    static const std::string MAP_NAME;
+
 private:
 
     void markPointsBetween(Point<int> p0, Point<int> p1, double val, bool markInSeen = false);
@@ -135,7 +137,6 @@ private:
     static const double MAP_X_OFFSET, MAP_Y_OFFSET;
     static const double P_PRIOR, P_OCC, P_FREE;
     static const double FREE_OCCUPIED_THRESHOLD;
-    static const std::string MAP_NAME;
 
     static const double MAX_IR_DIST, MIN_IR_DIST;
 
