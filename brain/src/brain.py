@@ -96,10 +96,9 @@ class Explore(smach.State):
         elif is_at_intersection():
             #rospy.loginfo("Intersection detected, placing node")
             place_node(False)
-        else:
-            follow_wall(True)
-            go_forward(True)
-            return 'explore'    
+        follow_wall(True)
+        go_forward(True)
+        return 'explore'
 
 class ObstacleDetected(smach.State):
     def __init__(self):
@@ -452,7 +451,7 @@ def main(argv):
     recognize_object_pub = rospy.Publisher("/vision/recognize_now", Empty, queue_size=1)
     go_straight_pub = rospy.Publisher("controller/goto/straight", Float64, queue_size=1)
     speak_pub = rospy.Publisher("/espeak/string", String, queue_size=1)
-    shake_pub = rospy.Publisher("/goto/shake", Float32, queue_size=1)
+    shake_pub = rospy.Publisher("/goto/shake", Float64, queue_size=1)
 
     with sm:
         smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
