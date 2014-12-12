@@ -9,6 +9,7 @@ IRConverter::IRConverter()
     ,_filter_l(0.0)
     ,_filter_r(0.0)
     ,_lowpass_inertia("/perception/ir/filter_inertia",0.05)
+    ,_lowpass_inertia_front("/perception/ir/filter_inertia_front",0.5)
 {
     handle = ros::NodeHandle("");
     ir_subscriber = handle.subscribe("/arduino/adc", 1000, &IRConverter::IRCallback, this);
@@ -36,8 +37,8 @@ void IRConverter::publishDistance()
     _filter_fr.set_inertia(_lowpass_inertia());
     _filter_bl.set_inertia(_lowpass_inertia());
     _filter_br.set_inertia(_lowpass_inertia());
-    _filter_l.set_inertia(_lowpass_inertia());
-    _filter_r.set_inertia(_lowpass_inertia());
+    _filter_l.set_inertia(_lowpass_inertia_front());
+    _filter_r.set_inertia(_lowpass_inertia_front());
 
     //convert to distance in meter
     double fl_side = distance(id_front_left,        ir_fl_side) + offset_front_left;
