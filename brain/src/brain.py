@@ -172,9 +172,8 @@ class RecoverFromCrash(smach.State):
             go_forward(False)
             follow_wall(False)
             reset_flags()
-
-            go_straight(-0.2)
             rospy.sleep(1.0)
+            go_straight(-0.2)
             goto_node(current_node)
             turn_to_unexplored_edge()
 
@@ -239,6 +238,8 @@ def get_close_to_object():
         obj.x = pos.x
         obj.y = pos.y
         goto_node(obj)
+    else:
+        rospy.loginfo("Object close enough, X=%f", detected_object.x)
 
 def robot_to_map_pos(x, y):     
     if compass_direction == Node.EAST:     
@@ -450,7 +451,7 @@ def main(argv):
     recognize_object_pub = rospy.Publisher("/vision/recognize_now", Empty, queue_size=1)
     go_straight_pub = rospy.Publisher("controller/goto/straight", Float64, queue_size=1)
     speak_pub = rospy.Publisher("/espeak/string", String, queue_size=1)
-    shake_pub = rospy.Publisher("/goto/shake", Float64, queue_size=1)
+    shake_pub = rospy.Publisher("/controller/goto/shake", Float64, queue_size=1)
 
     with sm:
         smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
