@@ -14,6 +14,7 @@ add_message_files(
   FILES
   Node.msg
   Path.msg
+  Graph.msg
 )
 
 ## Generate services in the 'srv' folder

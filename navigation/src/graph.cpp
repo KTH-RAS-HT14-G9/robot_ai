@@ -31,10 +31,20 @@ typedef struct GraphPath_t {
 GraphPath _path;
 
 ros::Publisher _pub_on_node;
+ros::Publisher _pub_save;
 
 void callback_odometry(const nav_msgs::OdometryConstPtr& odom) {
 
     _position = odom->pose.pose.position;
+}
+
+void callback_save(const std_msgs::EmptyConstPtr& empty) {
+    _graph.publish_to_topic(_pub_save);
+}
+
+void callback_load(const navigation_msgs::GraphConstPtr& graph) {
+    ROS_ERROR("Loading graph");
+    _graph.read_from_msg(graph);
 }
 
 bool update_transform()
@@ -91,11 +101,11 @@ bool service_place_node(navigation_msgs::PlaceNodeRequest& request,
 
     if (request.object_here == true) {
 
-    if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
+        //if(robotToMapTransform(request.object_x,request.object_y, request.object_x,request.object_y))
         {
             _graph.place_object(response.generated_node.id_this, request);
         }
-        else success = false;
+        //else success = false;
     }
 
     return success;
@@ -480,13 +490,27 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "graph");
 
+    bool p2 = false;
+
+    if (argc == 2)
+        p2 = true;
+
     _path.next = 0;
 
     ros::NodeHandle n;
 
     _pub_on_node = n.advertise<navigation_msgs::Node>("/navigation/graph/on_node",10);
 
+    if (!p2)
+        _pub_save = n.advertise<navigation_msgs::Graph>("/graph/save",10);
+
     ros::Subscriber sub_odom = n.subscribe("/pose/odometry",10,callback_odometry);
+    ros::Subscriber sub_save = n.subscribe("/save",10,callback_save);
+    ros::Subscriber sub_graph;
+    if (p2) {
+        ROS_ERROR("P2");
+        sub_graph = n.subscribe("/graph/save",10,callback_load);
+    }
 
     ros::ServiceServer srv_place_node = n.advertiseService("/navigation/graph/place_node",service_place_node);
     ros::ServiceServer srv_next_noi = n.advertiseService("/navigation/graph/next_node_of_interest",service_next_noi);
@@ -497,15 +521,15 @@ int main(int argc, char **argv)
 
     ros::Rate rate(10.0);
    ///////test
-   //std::vector<Point> test_points;
-   //test2_graph_build(test_points);
+//   std::vector<Point> test_points;
+//   test2_graph_build(test_points);
    //std::vector<int> best_path;
    //std::cout<<"banana"<<std::endl;
-
+//    bool save = true;
 
     while(n.ok())
     {
-       // test2_graph(test_points);
+//       test2_graph(test_points);
 
         float x = _position.x;
         float y = _position.y;
@@ -516,6 +540,12 @@ int main(int argc, char **argv)
         }
 
         _graph_viz->draw();
+
+//        if (_test2_i >= test_points.size() && save) {
+//            std_msgs::EmptyConstPtr empty;
+//            callback_save(empty);
+//            save = false;
+//        }
 
        //if (_test2_i >= test_points.size()) {
        //     best_path=tsp_traverse_all_objects();

@@ -3,9 +3,12 @@
 
 #include <navigation_msgs/Node.h>
 #include <navigation_msgs/PlaceNodeRequest.h>
+#include <navigation_msgs/Graph.h>
 #include <common/parameter.h>
 #include <common/robot.h>
 #include <queue>
+#include <ros/serialization.h>
+#include <fstream>
 
 #define NAV_GRAPH_UNKNOWN -1
 #define NAV_GRAPH_BLOCKED -2
@@ -50,6 +53,9 @@ public:
 
     double get_dist_thresh() {return _dist_thresh();}
     double get_merge_thresh() {return _merge_thresh();}
+
+    void read_from_msg(const navigation_msgs::GraphConstPtr& msg);
+    void publish_to_topic(ros::Publisher& pub);
 
 protected:
 
@@ -471,5 +477,87 @@ void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vecto
     std::reverse(path.begin(), path.end());
 
 }
+
+void Graph::publish_to_topic(ros::Publisher& pub)
+{
+    navigation_msgs::Graph graph;
+    graph.nodes.reserve(_nodes.size());
+    for(int i = 0; i < _nodes.size(); ++i) {
+        graph.nodes.push_back(_nodes[i]);
+    }
+    pub.publish(graph);
+}
+
+void Graph::read_from_msg(const navigation_msgs::GraphConstPtr& msg)
+{
+    _nodes.clear();
+    _nodes.reserve(msg->nodes.size());
+    _next_node_id = msg->nodes.size();
+
+    for(int i = 0; i < msg->nodes.size(); ++i)
+    {
+        _nodes.push_back(msg->nodes[i]);
+    }
+}
+
+//void Graph::save_to_file()
+//{
+//    ROS_ERROR("Saving...");
+
+//    std::ofstream out("graph.txt");
+//    std::ofstream out_size("graph_size.txt");
+
+//    uint32_t serial_size = ros::serialization::serializationLength(_nodes);
+
+//    boost::shared_array<uint8_t> buffer(new uint8_t[serial_size]);
+
+//    ros::serialization::OStream stream(buffer.get(), serial_size);
+//    ros::serialization::serialize(stream, _nodes);
+
+//    uint8_t* data = stream.getData();
+//    out.write((char*)data, stream.getLength());
+//    out.close();
+
+//    out_size << serial_size << "\n" << _nodes.size();
+//    out_size.close();
+//}
+
+//void Graph::load_from_file()
+//{
+//    ROS_ERROR("Loading...");
+
+//    uint32_t serial_size;
+//    uint32_t num_nodes;
+
+//    //load number of nodes
+//    std::ifstream in_size("graph_size.txt");
+
+//    std::string line;
+//    std::getline(in_size, line);
+//    std::stringstream ss(line);
+//    ss >> serial_size;
+
+//    line.clear();
+//    std::getline(in_size, line);
+//    std::stringstream ss2(line);
+//    ss2 >> num_nodes;
+
+//    ROS_ERROR("Recovered size: %d, nodes: %d",serial_size, num_nodes);
+
+//    std::ifstream in("graph.txt");
+
+//    boost::shared_array<uint8_t> buffer(new uint8_t[serial_size]);
+//    uint8_t* buf = buffer.get();
+//    in.read((char*)buf, serial_size);
+
+//    std::vector<navigation_msgs::Node> nodes;
+//    nodes.resize(num_nodes);
+
+//    // Fill buffer with serialized nodes
+//    ros::serialization::IStream stream(buffer.get(), serial_size);
+//    ros::serialization::deserialize(stream, nodes);
+
+//    ROS_ERROR("Recovered nodes: %ld", nodes.size());
+//}
 
 #endif
