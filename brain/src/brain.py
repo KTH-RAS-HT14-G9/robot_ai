@@ -97,10 +97,9 @@ class Explore(smach.State):
         elif is_at_intersection():
             #rospy.loginfo("Intersection detected, placing node")
             place_node(False)
-        else:
-            follow_wall(True)
-            go_forward(True)
-            return 'explore'    
+        follow_wall(True)
+        go_forward(True)
+        return 'explore'
 
 class ObstacleDetected(smach.State):
     def __init__(self):
@@ -174,9 +173,8 @@ class RecoverFromCrash(smach.State):
             go_forward(False)
             follow_wall(False)
             reset_flags()
-
-            go_straight(-0.2)
             rospy.sleep(1.0)
+            go_straight(-0.2)
             goto_node(current_node)
             turn_to_unexplored_edge()
 
