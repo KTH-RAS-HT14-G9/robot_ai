@@ -231,9 +231,9 @@ def follow_path():
 
 def get_close_to_object():
 
-    if detected_object.x > RECOGNITION_DISTANCE:
-        rospy.loginfo("Object is too far away, going closer.")
-        rospy.loginfo("Going forward %f", detected_object.x-RECOGNITION_DISTANCE)
+    if math.fabs(detected_object.x-RECOGNITION_DISTANCE) > 0.05:
+        rospy.loginfo("Moving to optimal recignition distance.")
+        rospy.loginfo("Going forward %f meters.", detected_object.x-RECOGNITION_DISTANCE)
         go_straight(detected_object.x-RECOGNITION_DISTANCE)
     else:
         rospy.loginfo("Object close enough, X=%f", detected_object.x)
