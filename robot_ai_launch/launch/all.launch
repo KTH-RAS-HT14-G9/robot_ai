@@ -1,8 +1,14 @@
 <launch>
+	<arg name="phase" default="p1" />
+
 	<node pkg="rosserial_python" type="serial_node.py" name="serial_node" args="_port:=/dev/ttyACM0"/>
-	<!-- <node pkg="ras_espeak" type="espeak_node" name="espeak_node" /> -->
+    <include file="$(find phidgets_imu)/launch/imu.launch" />
+	<node pkg="ras_espeak" type="espeak_node" name="espeak_node" />
 
 	<include file="$(find controllers_launch)/launch/controllers.launch" />
-	<!--<include file="$(find vision_launch)/launch/vision.launch" />-->
-	<include file="$(find robot_ai_launch)/launch/ai.launch" />
+	<include file="$(find vision_launch)/launch/vision.launch" />
+	<include file="$(find robot_ai_launch)/launch/ai.launch">	
+		<arg name="phase" value="$(arg phase)" />
+	</include>
+
 </launch>

@@ -19,7 +19,7 @@ float _accel;
 float _temp_acc;
 
 //Parameter
-Parameter<double> _accel_th("/perception/imu/accel_th",3.0);
+Parameter<double> _accel_th("/perception/imu/accel_th",2.0);
 Parameter<double> _cutoff("/perception/imu/cutoff",0.5);
 
 ros::Publisher _pub_imu;

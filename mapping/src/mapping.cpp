@@ -9,8 +9,8 @@ const double Mapping::MAP_X_OFFSET = MAP_WIDTH/2.0;
 const double Mapping::MAP_Y_OFFSET = MAP_HEIGHT/2.0;
 
 const double Mapping::P_PRIOR = log(0.5);
-const double Mapping::P_OCC = log(0.9); //log(0.7);
-const double Mapping::P_FREE  = log(0.4);//log(0.35);
+const double Mapping::P_OCC = log(0.7);
+const double Mapping::P_FREE = log(0.35);
 
 const double Mapping::FREE_OCCUPIED_THRESHOLD = log(0.5);
 
@@ -30,20 +30,19 @@ typedef pcl::PointXYZI PCPoint;
 Mapping::Mapping() :
     fl_ir_reading(INVALID_READING), fr_ir_reading(INVALID_READING),
     bl_ir_reading(INVALID_READING), br_ir_reading(INVALID_READING),
-    pos(Point<double>(0.0,0.0)), turning(false),
+    pos(Point<double>(0.0,0.0)),
     wall_planes(new std::vector<common::vision::SegmentedPlane>()),
+    active(true),
     markers_map("map","raycasts"),
     markers_robot("robot","planes"),
     frustum_fov("/mapping/frustum/fov",45.0),
     frustum_dist("/mapping/frustum/dist",0.6),
-    use_planes("/mapping/use_planes",false),
-    active(true)
+    use_planes("/mapping/use_planes",false)
+
 {
     handle = ros::NodeHandle("");
     distance_sub = handle.subscribe("/perception/ir/distance", 1, &Mapping::distanceCallback, this);
     odometry_sub = handle.subscribe("/pose/odometry/", 1, &Mapping::odometryCallback, this);
-    start_turn_sub = handle.subscribe("/controller/turn/angle", 1, &Mapping::startTurnCallback, this);
-    stop_turn_sub = handle.subscribe("/controller/turn/done", 1, &Mapping::stopTurnCallback, this);
     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
     active_sub = handle.subscribe("mapping/active", 1, &Mapping::activateUpdateCallback, this);
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
@@ -53,6 +52,9 @@ Mapping::Mapping() :
     srv_raycast = handle.advertiseService("/mapping/raycast", &Mapping::performRaycast, this);
     srv_fit = handle.advertiseService("/mapping/fitblob", &Mapping::serviceFitRequest, this);
     srv_isunexplored = handle.advertiseService("/mapping/has_unexplored_region", &Mapping::serviceHasUnexploredRegion, this);
+
+    srv_to_robot = handle.advertiseService("/mapping/transform_to_map", &Mapping::transformToRobot, this);
+    srv_to_map = handle.advertiseService("/mapping/transform_to_robot", &Mapping::transformToMap, this);
 
     occupancy_grid.header.frame_id = "world";
     nav_msgs::MapMetaData metaData;
@@ -70,6 +72,67 @@ Mapping::Mapping() :
     initOccupancyGrid();
 }
 
+bool Mapping::transformToRobot(navigation_msgs::TransformPointRequest &request, navigation_msgs::TransformPointResponse &response)
+{
+    Point<double> transformed_point = transformPointToRobotSystem(request.source_frame_id, request.x, request.y);
+    response.x = transformed_point.x;
+    response.y = transformed_point.y;
+    return true;
+}
+
+bool Mapping::transformToMap(navigation_msgs::TransformPointRequest &request, navigation_msgs::TransformPointResponse &response)
+{
+    Point<double> transformed_point = transformPointToMapSystem(request.source_frame_id, request.x, request.y);
+    response.x = transformed_point.x;
+    response.y = transformed_point.y;
+    return true;
+}
+
+void Mapping::saveToFile(const std::string& file_name)
+{
+	std::ofstream out;
+	out.open(file_name.c_str());
+	int i,j;
+	for (i=0; i<GRID_HEIGHT; i++)
+	{
+		for (j=0; j<GRID_WIDTH; j++)
+		{
+			out << prob_grid[i][j] << "\n";
+		}
+	}
+	out.close();
+}
+
+void Mapping::recoverFromFile(const std::string& file_name)
+{
+	std::ifstream in;
+	in.open(file_name.c_str());
+	int i,j;
+	for (i=0; i<GRID_HEIGHT; i++)
+	{
+		for (j=0; j<GRID_WIDTH; j++)
+		{
+			in >> prob_grid[i][j];
+		}
+	}
+	in.close();
+}
+
+void Mapping::recoverAndRefreshOccGrid(const std::string& file_name)
+{
+    recoverFromFile(file_name);
+    int i,j;
+    Point<int> point;
+    for (i=0; i<GRID_HEIGHT; i++) {
+        for (j=0; j<GRID_WIDTH; j++) {
+            point.x = i;
+            point.y = j;
+            if(prob_grid[j][i] != -0.693147)
+                updateOccupancyGrid(point);
+        }
+    }
+}
+
 void Mapping::updateGrid()
 {
     if(active) {
@@ -85,7 +148,6 @@ void Mapping::updateGrid()
     updateHaveSeen();
 
 }
-
 
 /**
   * Adapted from
@@ -191,7 +253,6 @@ void Mapping::updateWalls(bool markOnHaveSeen)
         common::vision::SegmentedPlane& plane = wall_planes->at(i);
 
         double width = std::max(plane.get_obb().get_width(), plane.get_obb().get_depth());
-        //ROS_ERROR("Wall w=%.3lf, h=%.3lf, d=%.3lf",plane.get_obb().get_width(), plane.get_obb().get_height(), plane.get_obb().get_depth());
 
         //only consider walls that have a minimum width
         if(width < 0.2)
@@ -439,21 +500,6 @@ void Mapping::odometryCallback(const nav_msgs::Odometry::ConstPtr& odom)
     pos = Point<double>(x,y);
 }
 
-void Mapping::startTurnCallback(const std_msgs::Float64::ConstPtr & angle)
-{
-    turning = true;
-}
-
-void Mapping::stopTurnCallback(const std_msgs::Bool::ConstPtr & var)
-{
-    turning = false;
-}
-
-void Mapping::activateUpdateCallback(const std_msgs::Bool::ConstPtr& active)
-{
-    this->active = active;   
-}
-
 void Mapping::updateTransform()
 {
     try {
@@ -577,6 +623,22 @@ Point<int> Mapping::transformPointToGridSystem(const std::string& frame_id, doub
     return mapPointToCell(Point<double>(stamped_out.point.x + MAP_X_OFFSET, stamped_out.point.y + MAP_Y_OFFSET));
 }
 
+Point<double> Mapping::transformPointToMapSystem(std::string& frame_id, double x, double y)
+{
+    geometry_msgs::PointStamped stamped_in;
+    stamped_in.header.frame_id = frame_id;
+    //stamped_in.header.stamp = ros::Time::now();
+    stamped_in.header.stamp = transform.stamp_;
+    stamped_in.point.x = x;
+    stamped_in.point.y = y;
+    stamped_in.point.z = 0;
+
+    geometry_msgs::PointStamped stamped_out;
+    tf_listener.transformPoint("map",stamped_in,stamped_out);
+
+    return Point<double>(stamped_out.point.x, stamped_out.point.y);
+}
+
 Point<double> Mapping::transformCellToMap(Point<int>& cell)
 {
     double x = cell.x;
@@ -694,7 +756,7 @@ bool Mapping::performRaycast(navigation_msgs::RaycastRequest &request, navigatio
     }
 
     pub_viz.publish(markers_map.get());
-    markers_map.clear();
+//    markers_map.clear();
 
     return true;
 
@@ -736,7 +798,11 @@ bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, naviga
     response.fits = ((double)num_occluded/(double)num_cells) < request.max_occlusion_ratio;
 
     return true;
+}
 
+void Mapping::activateUpdateCallback(const std_msgs::Bool::ConstPtr& active)
+{
+    this->active = active;   
 }
 
 bool Mapping::serviceHasUnexploredRegion(navigation_msgs::UnexploredRegionRequest& request,

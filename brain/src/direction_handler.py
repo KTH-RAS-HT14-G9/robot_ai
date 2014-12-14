@@ -7,7 +7,7 @@ class RobotDirections(IntEnum):
     BACKWARD=2
     LEFT=3 
 
-def robot_to_map_dir(robot_dir):
+def robot_to_map_dir(robot_dir, compass_direction):
     if compass_direction == Node.NORTH:
         return robot_dir
     if compass_direction == Node.EAST:
@@ -17,7 +17,7 @@ def robot_to_map_dir(robot_dir):
     if compass_direction == Node.WEST:
         return (robot_dir + 3) % 4
 
-def map_to_robot_dir(map_dir):
+def map_to_robot_dir(map_dir, compass_direction):
     if compass_direction == Node.NORTH:
         return map_dir
     if compass_direction == Node.WEST:

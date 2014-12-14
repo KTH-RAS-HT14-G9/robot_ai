@@ -25,6 +25,7 @@ add_service_files(
   Raycast.srv
   FitBlob.srv
   UnexploredRegion.srv
+  TransformPoint.srv
 )
 
 ## Generate actions in the 'action' folder

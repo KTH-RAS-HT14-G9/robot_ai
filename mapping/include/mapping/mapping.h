@@ -23,6 +23,8 @@
 #include <navigation_msgs/FitBlob.h>
 #include <navigation_msgs/UnexploredRegion.h>
 #include <common/marker_delegate.h>
+#include <navigation_msgs/TransformPoint.h>
+#include <fstream>
 
 using std::vector;
 
@@ -42,8 +44,6 @@ public:
     Mapping();
     void distanceCallback(const ir_converter::Distance::ConstPtr&);
     void odometryCallback(const nav_msgs::Odometry::ConstPtr&);
-    void startTurnCallback(const std_msgs::Float64::ConstPtr&);
-    void stopTurnCallback(const std_msgs::Bool::ConstPtr&);
     void wallDetectedCallback(const vision_msgs::Planes::ConstPtr&);
     void activateUpdateCallback(const std_msgs::Bool::ConstPtr&);
     bool performRaycast(navigation_msgs::RaycastRequest &request,
@@ -55,9 +55,16 @@ public:
     void updateGrid();
     void publishMap();
     void updateTransform();
+    bool transformToRobot(navigation_msgs::TransformPointRequest &request, 
+                                    navigation_msgs::TransformPointResponse &response);
+    bool transformToMap(navigation_msgs::TransformPointRequest &request, 
+                                    navigation_msgs::TransformPointResponse &response);
+    void saveToFile(const std::string& file_name);
+    void recoverFromFile(const std::string& file_name);
+    void recoverAndRefreshOccGrid(const std::string& file_name);
 
 private:
-    //void markPointsBetween(Point<double> p1, Point<double> p2, double val);
+
     void markPointsBetween(Point<int> p0, Point<int> p1, double val, bool markInSeen = false);
     void updateIR(double ir_reading, double ir_x_offset);
     void updateHaveSeen();
@@ -67,6 +74,7 @@ private:
     Point<double> robotToMapTransform(Point<double> p);
     Point<int> mapPointToCell(Point<double> p);
     Point<double> transformPointToRobotSystem(std::string& frame_id, double x, double y);
+    Point<double> transformPointToMapSystem(std::string& frame_id, double x, double y);
     Point<int> transformPointToGridSystem(const std::string &frame_id, double x, double y);
     Point<double> transformCellToMap(Point<int>& cell);
     void markProbabilityGrid(Point<int> cell, double log_prob);
@@ -83,8 +91,6 @@ private:
     ros::NodeHandle handle;
     ros::Subscriber distance_sub;
     ros::Subscriber odometry_sub;
-    ros::Subscriber start_turn_sub;
-    ros::Subscriber stop_turn_sub;
     ros::Subscriber wall_sub;
     ros::Subscriber object_sub;
     ros::Subscriber active_sub;
@@ -105,6 +111,8 @@ private:
 
     ros::ServiceServer srv_raycast;
     ros::ServiceServer srv_fit;
+    ros::ServiceServer srv_to_robot;
+    ros::ServiceServer srv_to_map;
     ros::ServiceServer srv_isunexplored;
 
     common::vision::SegmentedPlane::ArrayPtr wall_planes;
@@ -112,9 +120,9 @@ private:
     vector<vector<double> > prob_grid;
     vector<vector<uint8_t> > seen_grid;
     nav_msgs::OccupancyGrid occupancy_grid;
+
     nav_msgs::OccupancyGrid seen_viz_grid;
 
-    bool turning;
     Point<double> pos;
     double fl_ir_reading, fr_ir_reading, bl_ir_reading, br_ir_reading;
     bool active;
