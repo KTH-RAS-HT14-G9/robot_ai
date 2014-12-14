@@ -57,6 +57,8 @@ public:
     void read_from_msg(const navigation_msgs::GraphConstPtr& msg);
     void publish_to_topic(ros::Publisher& pub);
 
+    bool dirty_fix;
+
 protected:
 
     bool on_node(float x, float y, float max_dist, navigation_msgs::Node &node);
@@ -92,6 +94,7 @@ Graph::Graph()
     ,_merge_thresh("/navigation/graph/merge_thresh",robot::dim::wheel_distance/1.5)
     ,_dist_thresh("/navigation/graph/dist_thresh",robot::dim::wheel_distance/1.5)
     ,_update_positions("/navigation/graph/update_positions",false)
+    ,dirty_fix(false)
 {
 }
 
@@ -408,6 +411,11 @@ void Graph::path_to_node(int id_from, int id_to, std::vector<int> &path, double&
     is_target_node.resize(_nodes.size());
     is_target_node[id_to] = true;
 
+//    std::cout << "From " << id_from << " to " << id_to << " Filter: ";
+//    for(int i = 0; i < is_target_node.size(); ++i)
+//        std::cout << "i = " << i << ": " << is_target_node[i] << ", ";
+//    std::cout << std::endl;
+
     path_to_poi(id_from, is_target_node, path, dist);
 }
 
@@ -458,6 +466,7 @@ void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vecto
     float min_dist = std::numeric_limits<float>::infinity();
 
     for (int i = 0; i < _nodes.size(); ++i) {
+        std::cout << i << ": " << filter[i] << ", dist: " << distances[i] << std::endl;
         if (filter[i] && distances[i] < min_dist) {
             min_dist = distances[i];
             i_min_dist = i;
@@ -465,9 +474,11 @@ void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vecto
     }
 
     //no node to reach
-    if (i_min_dist) {
-        path.push_back(id_from);
-        return;
+    if (!dirty_fix) {
+        if (i_min_dist) {
+            path.push_back(id_from);
+            return;
+        }
     }
 
     dist = min_dist;
