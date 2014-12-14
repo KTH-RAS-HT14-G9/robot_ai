@@ -540,7 +540,7 @@ int main(int argc, char **argv)
         float x = _position.x;
         float y = _position.y;
 
-        if (_graph.on_node(x,y, node)) {
+        if (_graph.on_node(x,y, node) || _graph.on_object_node(x,y, node)) {
             _pub_on_node.publish(node);
             _graph_viz->highlight_node(node.id_this,true);
         }

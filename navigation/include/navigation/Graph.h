@@ -288,15 +288,7 @@ double sq_dist(double x0, double y0, double x1, double y1)
 
 bool Graph::on_node(float x, float y, navigation_msgs::Node &node)
 {
-    double dist;
-    int i = get_closest_node(x,y, true, dist);
-
-    if (dist <= _dist_thresh())
-    {
-        node = _nodes[i];
-        return true;
-    }
-    return false;
+    return on_node(x,y, _dist_thresh(), node);
 }
 
 int Graph::get_closest_node(float x, float y, bool consider_obj, double& min_dist)
@@ -323,7 +315,7 @@ int Graph::get_closest_node(float x, float y, bool consider_obj, double& min_dis
 
 bool Graph::on_object_node(float x, float y, navigation_msgs::Node& node)
 {
-    double sq_dist_thresh = _merge_thresh();
+    double sq_dist_thresh = _dist_thresh();
     sq_dist_thresh *= sq_dist_thresh;
 
     double min_dist;
