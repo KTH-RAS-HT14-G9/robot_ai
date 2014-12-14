@@ -201,12 +201,19 @@ class FollowGraph(smach.State):
 
         if follow_graph_trait == NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR:
             turn_to_unexplored_edge()
+        elif follow_graph_trait == NextNodeOfInterestRequest.TRAIT_START:
+            speak_pub.publish("I am home")
+            rospy.sleep(3.0)
+            rospy.loginfo("Initiating phase 2.")
+            follow_graph_trait = NextNodeOfInterestRequest.TRAIT_TSP
+            speak_on_object = True
 
         rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
         return 'explore'
 
 
 def turn_to_unexplored_edge():
+    global follow_graph_trait
     rospy.loginfo("Turning to unexplored edge.")
     if current_node.edges[Node.NORTH] == Node.UNKNOWN:
         turn(get_angle_to(Node.NORTH))
@@ -216,6 +223,9 @@ def turn_to_unexplored_edge():
         turn(get_angle_to(Node.SOUTH))
     elif current_node.edges[Node.WEST] == Node.UNKNOWN:
         turn(get_angle_to(Node.WEST))
+    else:
+        rospy.loginfo("Followed path to node with no unexplored dir. Returning home.")
+        follow_graph_trait = NextNodeOfInterestRequest.TRAIT_START
 
 def get_angle_to(map_dir):
     angle = 90.0 * ((compass_direction - map_dir + 4) % 4)
@@ -368,6 +378,7 @@ def object_detected_callback(new_object):
 def on_node_callback(node):
     global current_node, node_detected
     if(current_node.id_this != node.id_this):
+        place_node(False)
         rospy.loginfo("On node callback. Previous node: %d, New node: %d.", current_node.id_this, node.id_this)
         current_node = node
         node_detected[0] = True
