@@ -9,10 +9,12 @@ const double Mapping::MAP_X_OFFSET = MAP_WIDTH/2.0;
 const double Mapping::MAP_Y_OFFSET = MAP_HEIGHT/2.0;
 
 const double Mapping::P_PRIOR = log(0.5);
-const double Mapping::P_OCC = log(0.7);
-const double Mapping::P_FREE = log(0.35);
+const double Mapping::P_OCC = log(0.9); //log(0.7);
+const double Mapping::P_FREE  = log(0.4);//log(0.35);
 
 const double Mapping::FREE_OCCUPIED_THRESHOLD = log(0.5);
+
+const std::string Mapping::MAP_NAME = "contestMap.map";
 
 const double Mapping::MAX_IR_DIST = 0.5;
 const double Mapping::MIN_IR_DIST = 0.04;
@@ -45,6 +47,7 @@ Mapping::Mapping() :
     odometry_sub = handle.subscribe("/pose/odometry/", 1, &Mapping::odometryCallback, this);
     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
     active_sub = handle.subscribe("mapping/active", 1, &Mapping::activateUpdateCallback, this);
+    map_save = handle.subscribe("/save", 5, &Mapping::saveMapCallback, this);
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
     seen_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/seen_grid",1);
     pub_viz = handle.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",10);
@@ -531,6 +534,13 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "mapping");
     Mapping mapping;
+    //int size = argv.size();
+    int i;
+    for(i=0; i<argc; i++) {
+    	if(strcmp(argv[i],"p2") == 0)
+    		mapping.recoverAndRefreshOccGrid(mapping.MAP_NAME);
+    }
+
     ros::Rate loop_rate(20);
 
     int counter = 0;
@@ -803,6 +813,11 @@ bool Mapping::serviceFitRequest(navigation_msgs::FitBlobRequest &request, naviga
 void Mapping::activateUpdateCallback(const std_msgs::Bool::ConstPtr& active)
 {
     this->active = active;   
+}
+
+void Mapping::saveMapCallback(const std_msgs::Empty::ConstPtr& empty)
+{
+	saveToFile(MAP_NAME);
 }
 
 bool Mapping::serviceHasUnexploredRegion(navigation_msgs::UnexploredRegionRequest& request,

@@ -11,4 +11,6 @@
 		<arg name="phase" value="$(arg phase)" />
 	</include>
 
+	<!--<node pkg="rosbag" type="record" name="rosbag" args="-O /opt/ros/p1_graph.bag /graph/save" /> -->
+
 </launch>

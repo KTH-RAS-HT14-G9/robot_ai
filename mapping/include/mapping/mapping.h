@@ -46,6 +46,7 @@ public:
     void odometryCallback(const nav_msgs::Odometry::ConstPtr&);
     void wallDetectedCallback(const vision_msgs::Planes::ConstPtr&);
     void activateUpdateCallback(const std_msgs::Bool::ConstPtr&);
+    void saveMapCallback(const std_msgs::Empty::ConstPtr&);
     bool performRaycast(navigation_msgs::RaycastRequest &request,
                         navigation_msgs::RaycastResponse &response);
     bool serviceFitRequest(navigation_msgs::FitBlobRequest& request,
@@ -62,6 +63,8 @@ public:
     void saveToFile(const std::string& file_name);
     void recoverFromFile(const std::string& file_name);
     void recoverAndRefreshOccGrid(const std::string& file_name);
+
+    static const std::string MAP_NAME;
 
 private:
 
@@ -94,6 +97,7 @@ private:
     ros::Subscriber wall_sub;
     ros::Subscriber object_sub;
     ros::Subscriber active_sub;
+    ros::Subscriber map_save;
 
     ros::Publisher map_pub;
     ros::Publisher seen_pub;
