@@ -38,7 +38,7 @@ Mapping::Mapping() :
     markers_map("map","raycasts"),
     markers_robot("robot","planes"),
     frustum_fov("/mapping/frustum/fov",45.0),
-    frustum_dist("/mapping/frustum/dist",0.6),
+    frustum_dist("/mapping/frustum/dist",0.4),
     use_planes("/mapping/use_planes",false)
 
 {

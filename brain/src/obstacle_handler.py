@@ -8,7 +8,7 @@ from nav_msgs.msg import Odometry
 from direction_handler import *
 
 SIDE_BLOCKED_THRESHOLD = 0.30
-FRONT_BLOCKED_THRESHOLD = 0.22
+FRONT_BLOCKED_THRESHOLD = 0.23
 ROBOT_DIAMETER = 0.25
 fit_blob_service = None
 MAX_OCCLUSION = 0.1

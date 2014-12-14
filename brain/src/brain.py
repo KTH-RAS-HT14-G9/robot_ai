@@ -32,11 +32,12 @@ OBJECTS=[
 OBJECT_DETECTION_MUTE_TIME = 5.0
 RECOGNITION_TIME = 3.0
 WAITING_TIME = 0.005
-RECOGNITION_DISTANCE = 0.35
+RECOGNITION_DISTANCE = 0.45
 
 object_recognized_time = 0.0
 recognition_done_time = 0.0
 mute_recognition = False
+original_distance_to_object = 0.0
 
 detected_object = Object()
 odometry = Odometry()
@@ -74,12 +75,12 @@ speak_on_object = False
 class Explore(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=
-                                    ['explore','obstacle_detected', 
-                                    'object_detected', 'follow_graph', 
+                                    ['explore','obstacle_detected',
+                                    'object_detected', 'follow_graph',
                                     'recover_from_crash'])
 
     def execute(self, userdata):
-        
+
         update_walls_changed()
         if emergency_stop:
             rospy.loginfo("EXPLORE ==> RECOVER_FROM_CRASH")
@@ -92,7 +93,7 @@ class Explore(smach.State):
             return 'follow_graph'
         elif ObstacleHandler.obstacle_ahead():
             rospy.loginfo("EXPLORE ==> OBSTACLE_DETECTED")
-            return 'obstacle_detected'        
+            return 'obstacle_detected'
         elif is_at_intersection():
             #rospy.loginfo("Intersection detected, placing node")
             place_node(False)
@@ -125,8 +126,8 @@ class ObjectDetected(smach.State):
         smach.State.__init__(self, outcomes=['explore'])
 
     def execute(self, userdata):
-        global recognition_done_time, object_detected, mute_recognition
-        
+        global recognition_done_time, object_detected, mute_recognition, original_distance_to_object
+
         go_forward(False)
         follow_wall(False)
 
@@ -141,7 +142,7 @@ class ObjectDetected(smach.State):
 
         if math.fabs(object_angle) > 10.0:
            turn(object_angle)
-        
+
         rospy.loginfo("Going to shake for %f seconds.", RECOGNITION_TIME)
         shake_pub.publish(RECOGNITION_TIME)
         rospy.sleep(RECOGNITION_TIME)
@@ -152,13 +153,17 @@ class ObjectDetected(smach.State):
         if object_recognized_time > start_time:
             rospy.loginfo("Reognition successful!")
             place_node(True)
-        else: 
+        else:
             rospy.loginfo("Reognition failed.")
-        
+
         object_detected = False
         recognition_done_time = rospy.get_time()
         mute_recognition = True
         reset_node_detected()
+
+	if original_distance_to_object < 0:
+            go_straight(-original_distance_to_object)
+            original_distance_to_object = 0.0
 
         rospy.loginfo("OBJECT_DETECTED ==> EXPLORE")
         return 'explore'
@@ -186,6 +191,7 @@ class FollowGraph(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['explore', 'follow_graph'])
     def execute(self, userdata):
+        global follow_graph_trait, speak_on_object
         go_forward(False)
         follow_wall(False)
         rospy.loginfo("Disabling mapping.")
@@ -215,17 +221,32 @@ class FollowGraph(smach.State):
 def turn_to_unexplored_edge():
     global follow_graph_trait
     rospy.loginfo("Turning to unexplored edge.")
+    n = (current_node.edges[Node.NORTH] == Node.BLOCKED)
+    e = (current_node.edges[Node.EAST] == Node.BLOCKED)
+    s = (current_node.edges[Node.SOUTH] == Node.BLOCKED)
+    w = (current_node.edges[Node.WEST] == Node.BLOCKED)
+
     if current_node.edges[Node.NORTH] == Node.UNKNOWN:
         turn(get_angle_to(Node.NORTH))
+	update_unexplored_edges(ObstacleHandler.north_blocked(), e, s, w)
     elif current_node.edges[Node.EAST] == Node.UNKNOWN:
         turn(get_angle_to(Node.EAST))
+        update_unexplored_edges(n, ObstacleHandler.east_blocked(), s, w)
     elif current_node.edges[Node.SOUTH] == Node.UNKNOWN:
         turn(get_angle_to(Node.SOUTH))
+        update_unexplored_edges(n, e, ObstacleHandler.south_blocked(), w)
     elif current_node.edges[Node.WEST] == Node.UNKNOWN:
         turn(get_angle_to(Node.WEST))
-    else:
+    elif follow_graph_trait == NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR:
         rospy.loginfo("Followed path to node with no unexplored dir. Returning home.")
+        speak_pub.publish("Going home")
         follow_graph_trait = NextNodeOfInterestRequest.TRAIT_START
+
+    update_unexplored_edges(n, e, s, ObstacleHandler.west_blocked())
+
+def update_unexplored_edges(n, e, s, w):
+    response = place_node_service.call(PlaceNodeRequest(current_node.id_this, compass_direction, n, e, s, w, False, -1, 0, 0))
+    
 
 def get_angle_to(map_dir):
     angle = 90.0 * ((compass_direction - map_dir + 4) % 4)
@@ -235,18 +256,22 @@ def get_angle_to(map_dir):
 
 def follow_path():
     path = next_noi_service.call(NextNodeOfInterestRequest(current_node.id_this, follow_graph_trait)).path
+    rospy.logerr("%s, trait: %d", str(path), follow_graph_trait)
     follow_path_pub.publish(path)
     goto_done[0] = False
     wait_for_flag(goto_done)
 
 def get_close_to_object():
+    global original_distance_to_object
 
     if math.fabs(detected_object.x-RECOGNITION_DISTANCE) > 0.05:
         rospy.loginfo("Moving to optimal recignition distance.")
         rospy.loginfo("Going forward %f meters.", detected_object.x-RECOGNITION_DISTANCE)
         go_straight(detected_object.x-RECOGNITION_DISTANCE)
+        original_distance_to_object = detected_object.x-RECOGNITION_DISTANCE
     else:
         rospy.loginfo("Object close enough, X=%f", detected_object.x)
+        original_distance_to_object = 0.0
 
 def place_node(object_here):
     global current_node, walls_have_changed
@@ -255,7 +280,7 @@ def place_node(object_here):
     s = ObstacleHandler.south_blocked()
     w = ObstacleHandler.west_blocked()
     response = place_node_service.call(PlaceNodeRequest(current_node.id_this, compass_direction, n, e, s, w, object_here, detected_object.type, detected_object.x, detected_object.y))
-    
+
     if response.generated_node.id_this != current_node.id_this:
         rospy.loginfo("Placed node with id: %d, object: %s.", response.generated_node.id_this, str(response.generated_node.object_here))
         if not object_here:
@@ -270,7 +295,7 @@ def turn_left():
     rospy.loginfo("Turning left.")
     turn(90.0)
     reset_object_detection_mute()
-    
+
 def turn_right():
     rospy.loginfo("Turning right.")
     turn(-90.0)
@@ -319,10 +344,10 @@ def go_forward(should_go):
         if not should_go:
             wait_for_flag(stop_done)
 
-def update_walls_changed(): 
+def update_walls_changed():
     global walls_have_changed
     if walls_changed_in_dir(RobotDirections.LEFT) or walls_changed_in_dir(RobotDirections.RIGHT):
-        walls_have_changed = True 
+        walls_have_changed = True
 
 def walls_changed_in_dir(robot_dir):
     node_blocked = current_node.edges[robot_to_map_dir(robot_dir, compass_direction)]==Node.BLOCKED
@@ -343,7 +368,7 @@ def go_straight(distance):
     go_straight_pub.publish(distance)
     wait_for_flag(goto_done)
 
-def is_at_intersection(): 
+def is_at_intersection():
     if walls_have_changed and not ObstacleHandler.obstacle_ahead() and (ObstacleHandler.can_turn_right() or ObstacleHandler.can_turn_left()):
             return True
     return False
@@ -351,7 +376,7 @@ def is_at_intersection():
 def turn_done_callback(data):
     global turn_done
     turn_done[0] = True
-    rospy.loginfo("Turn done callback.") 
+    rospy.loginfo("Turn done callback.")
 
 def stopping_done_callback(data):
     global stop_done
@@ -372,14 +397,14 @@ def object_detected_callback(new_object):
 
         if new_object.type != Object.TYPE_UNKNOWN:
             object_recognized_time = rospy.get_time()
-    else: 
+    else:
         rospy.loginfo("New object detected, but it was ignored. X=%f, Y=%f, TYPE=%d.", new_object.x, new_object.y, new_object.type)
 
 def on_node_callback(node):
     global current_node, node_detected
     if(current_node.id_this != node.id_this):
-        place_node(False)
         rospy.loginfo("On node callback. Previous node: %d, New node: %d.", current_node.id_this, node.id_this)
+        place_node(False)
         current_node = node
         node_detected[0] = True
         if node.object_here and speak_on_object:
@@ -387,7 +412,7 @@ def on_node_callback(node):
             rospy.loginfo("%s (%d).", fetch_string, node.object_type)
             speak_pub.publish(fetch_string)
 
-def goto_done_callback(success):   
+def goto_done_callback(success):
     global goto_done
     goto_done[0] = success
     rospy.loginfo("Goto callback. Success: %s.", str(success))
@@ -426,7 +451,7 @@ def reset_flags():
     emergency_stop = False
 
 def main(argv):
-    global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, goto_node_pub, mapping_active_pub, follow_path_pub, recognize_object_pub, go_straight_pub, follow_graph_trait, speak_on_object, shake_pub
+    global turn_pub, follow_wall_pub, go_forward_pub, place_node_service, next_noi_service, current_node, goto_node_pub, mapping_active_pub, follow_path_pub, recognize_object_pub, go_straight_pub, follow_graph_trait, speak_on_object, shake_pub, speak_pub
     rospy.init_node('brain')
 
     sm = smach.StateMachine(outcomes=['finished'])
@@ -452,14 +477,14 @@ def main(argv):
     shake_pub = rospy.Publisher("/controller/goto/shake", Float64, queue_size=1)
 
     with sm:
-        smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH', 
+        smach.StateMachine.add('EXPLORE', Explore(), transitions={'explore':'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED', 'follow_graph' : 'FOLLOW_GRAPH',
             'object_detected' : 'OBJECT_DETECTED', 'recover_from_crash':'RECOVER_FROM_CRASH'})
         smach.StateMachine.add('OBSTACLE_DETECTED', ObstacleDetected(), transitions={'explore': 'EXPLORE','obstacle_detected':'OBSTACLE_DETECTED'})
         smach.StateMachine.add('OBJECT_DETECTED', ObjectDetected(), transitions={'explore': 'EXPLORE'})
         smach.StateMachine.add('FOLLOW_GRAPH', FollowGraph(), transitions={'explore' : 'EXPLORE',
             'follow_graph' : 'FOLLOW_GRAPH'})
         smach.StateMachine.add("RECOVER_FROM_CRASH", RecoverFromCrash(), transitions={'explore':'EXPLORE'})
-    
+
     rospy.wait_for_service('/navigation/graph/place_node')
     rospy.wait_for_service('/navigation/graph/next_node_of_interest')
     place_node_service = rospy.ServiceProxy('/navigation/graph/place_node', navigation_msgs.srv.PlaceNode)
@@ -481,8 +506,8 @@ def main(argv):
         w = True
         response = place_node_service.call(PlaceNodeRequest(-1, Node.EAST, n, e, s, w, False, -1, -1, -1))
         current_node = response.generated_node
-    
-    outcome = sm.execute() 
+
+    outcome = sm.execute()
 
 #if __name__ == '__main__':
 main(sys.argv)
