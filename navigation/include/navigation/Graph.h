@@ -454,7 +454,7 @@ void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vecto
     }
 
     //find closest node where condition is true
-    int i_min_dist = 0;
+    int i_min_dist = -1;
     float min_dist = std::numeric_limits<float>::infinity();
 
     for (int i = 0; i < _nodes.size(); ++i) {
@@ -462,6 +462,12 @@ void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vecto
             min_dist = distances[i];
             i_min_dist = i;
         }
+    }
+
+    //no node to reach
+    if (i_min_dist) {
+        path.push_back(id_from);
+        return;
     }
 
     dist = min_dist;
