@@ -220,7 +220,7 @@ std::vector<int> tsp_traverse_all_objects()
             best_path.push_back(nodes_between[j]);
         }
     }
-//    best_path.push_back(0);
+    best_path.push_back(0);
 //    std::cout << " || -> 0" << std::endl;
     return best_path;
     

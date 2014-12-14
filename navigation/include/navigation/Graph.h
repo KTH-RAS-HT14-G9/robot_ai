@@ -288,7 +288,15 @@ double sq_dist(double x0, double y0, double x1, double y1)
 
 bool Graph::on_node(float x, float y, navigation_msgs::Node &node)
 {
-    return on_node(x,y, _dist_thresh(), node);
+    double dist;
+    int i = get_closest_node(x,y, true, dist);
+
+    if (dist <= _dist_thresh())
+    {
+        node = _nodes[i];
+        return true;
+    }
+    return false;
 }
 
 int Graph::get_closest_node(float x, float y, bool consider_obj, double& min_dist)
