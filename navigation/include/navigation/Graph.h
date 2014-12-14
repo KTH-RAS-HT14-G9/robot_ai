@@ -209,10 +209,10 @@ bool Graph::on_node_auto_recover(float x, float y, navigation_msgs::PlaceNodeReq
 
 void Graph::update_blocked_edges(navigation_msgs::Node& node, navigation_msgs::PlaceNodeRequest& request)
 {
-    if (node.edges[North] <= NAV_GRAPH_UNKNOWN) node.edges[North] = request.east_blocked;
+    if (node.edges[North] <= NAV_GRAPH_UNKNOWN) node.edges[North] = request.north_blocked;
     if (node.edges[East] <= NAV_GRAPH_UNKNOWN) node.edges[East] = request.east_blocked;
-    if (node.edges[South] <= NAV_GRAPH_UNKNOWN) node.edges[South] = request.east_blocked;
-    if (node.edges[West] <= NAV_GRAPH_UNKNOWN) node.edges[West] = request.east_blocked;
+    if (node.edges[South] <= NAV_GRAPH_UNKNOWN) node.edges[South] = request.south_blocked;
+    if (node.edges[West] <= NAV_GRAPH_UNKNOWN) node.edges[West] = request.west_blocked;
 }
 
 navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::PlaceNodeRequest &request)
@@ -232,7 +232,7 @@ navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::Plac
         _nodes.push_back(node);
     }
     else {
-        ROS_INFO("On node %d", node.id_this);
+        ROS_INFO("On node %d. Updating blocked edges", node.id_this);
         update_blocked_edges(node, request);
         update_position(_nodes[node.id_this].x, _nodes[node.id_this].y, x, y);
     }
