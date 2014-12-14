@@ -152,7 +152,7 @@ void generate_all_permutations( std::vector<int>& object_nodes,std::vector<std::
 
 std::vector<int> tsp_traverse_all_objects()
 {
-    
+    _graph.dirty_fix = true;
     std::vector<int> object_nodes;
     std::vector<int> best_path;
     std::vector<int> best_objects;
@@ -161,6 +161,7 @@ std::vector<int> tsp_traverse_all_objects()
     if (object_nodes.size()==0)
     {
         best_path.push_back(_graph.get_node(0).id_this);
+        _graph.dirty_fix = false;
         return best_path;
     }
     
@@ -219,6 +220,10 @@ std::vector<int> tsp_traverse_all_objects()
         }
     }
     best_path.push_back(_graph.get_node(0).id_this);
+
+
+    _graph.dirty_fix = false;
+
     return best_path;
     
 }
@@ -526,8 +531,8 @@ int main(int argc, char **argv)
    ///////test
 //   std::vector<Point> test_points;
 //   test2_graph_build(test_points);
-   //std::vector<int> best_path;
-   //std::cout<<"banana"<<std::endl;
+//   std::vector<int> best_path;
+//   std::cout<<"banana"<<std::endl;
 //    bool save = true;
 
     while(n.ok())
@@ -550,13 +555,13 @@ int main(int argc, char **argv)
 //            save = false;
 //        }
 
-       //if (_test2_i >= test_points.size()) {
-       //     best_path=tsp_traverse_all_objects();
-       //      for (int i=0; i<best_path.size();++i){
-       //      std::cout<<best_path[i]<< "->"<<std::endl;
-       //     }
+//       if (_test2_i >= test_points.size()) {
+//            best_path=tsp_traverse_all_objects();
+//             for (int i=0; i<best_path.size();++i){
+//             std::cout<<best_path[i]<< "->"<<std::endl;
+//            }
 
-       // }
+//        }
 
         ros::spinOnce();
         rate.sleep();
