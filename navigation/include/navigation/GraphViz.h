@@ -137,12 +137,16 @@ void GraphViz::draw_node(int id, bool highlight)
 
     for(int i = 0; i < node.edges.size(); ++i)
     {
-        if (node.edges[i] >= NAV_GRAPH_UNKNOWN) {
+        if (node.edges[i] >= NAV_GRAPH_UNKNOWN || marker_id.edges[i] != -1) {
             double dx = 0, dy = 0;
             if (i == Node::NORTH) dy = +1.0;
             if (i == Node::EAST)  dx = +1.0;
             if (i == Node::SOUTH) dy = -1.0;
             if (i == Node::WEST)  dx = -1.0;
+
+            if (node.edges[i] == NAV_GRAPH_BLOCKED) {
+                dx = 0; dy = 0;
+            }
 
             if (node.edges[i] == NAV_GRAPH_UNKNOWN)
             {
