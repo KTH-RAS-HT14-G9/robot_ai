@@ -71,6 +71,7 @@ going_forward = False
 walls_have_changed = True
 emergency_stop = False
 speak_on_object = False
+target_reached = True
 
 class Explore(smach.State):
     def __init__(self):
@@ -147,14 +148,14 @@ class ObjectDetected(smach.State):
         shake_pub.publish(RECOGNITION_TIME)
         rospy.sleep(RECOGNITION_TIME)
 
-        if math.fabs(object_angle) > 10.0:
-            turn(-object_angle)
-
         if object_recognized_time > start_time:
             rospy.loginfo("Reognition successful!")
             place_node(True)
         else:
             rospy.loginfo("Reognition failed.")
+
+        if math.fabs(object_angle) > 10.0:
+            turn(-object_angle)
 
         object_detected = False
         recognition_done_time = rospy.get_time()
@@ -191,7 +192,7 @@ class FollowGraph(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['explore', 'follow_graph'])
     def execute(self, userdata):
-        global follow_graph_trait, speak_on_object
+        global follow_graph_trait, speak_on_object, node_detected, mute_recognition, recognition_done_time
         go_forward(False)
         follow_wall(False)
         rospy.loginfo("Disabling mapping.")
@@ -207,19 +208,22 @@ class FollowGraph(smach.State):
 
         if follow_graph_trait == NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR:
             turn_to_unexplored_edge()
-        elif follow_graph_trait == NextNodeOfInterestRequest.TRAIT_START:
+        elif follow_graph_trait == NextNodeOfInterestRequest.TRAIT_START and current_node.id_this == 0:
             speak_pub.publish("I am home")
             rospy.sleep(3.0)
             rospy.loginfo("Initiating phase 2.")
             follow_graph_trait = NextNodeOfInterestRequest.TRAIT_TSP
             speak_on_object = True
+            node_detected[0] = True
+            mute_recognition = True
+            recognition_done_time = 0
 
         rospy.loginfo("FOLLOW_GRAPH ==> EXPLORE")
         return 'explore'
 
 
 def turn_to_unexplored_edge():
-    global follow_graph_trait
+    global follow_graph_trait, node_detected
     rospy.loginfo("Turning to unexplored edge.")
     n = (current_node.edges[Node.NORTH] == Node.BLOCKED)
     e = (current_node.edges[Node.EAST] == Node.BLOCKED)
@@ -227,25 +231,29 @@ def turn_to_unexplored_edge():
     w = (current_node.edges[Node.WEST] == Node.BLOCKED)
 
     if current_node.edges[Node.NORTH] == Node.UNKNOWN:
+        update_unexplored_edges(True, e, s, w)
         turn(get_angle_to(Node.NORTH))
-	update_unexplored_edges(ObstacleHandler.north_blocked(), e, s, w)
     elif current_node.edges[Node.EAST] == Node.UNKNOWN:
+        update_unexplored_edges(n, True, s, w)
         turn(get_angle_to(Node.EAST))
-        update_unexplored_edges(n, ObstacleHandler.east_blocked(), s, w)
     elif current_node.edges[Node.SOUTH] == Node.UNKNOWN:
+        update_unexplored_edges(n, e, True, w)
         turn(get_angle_to(Node.SOUTH))
-        update_unexplored_edges(n, e, ObstacleHandler.south_blocked(), w)
     elif current_node.edges[Node.WEST] == Node.UNKNOWN:
+        update_unexplored_edges(n, e, s, True)
         turn(get_angle_to(Node.WEST))
-    elif follow_graph_trait == NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR:
+    elif follow_graph_trait == NextNodeOfInterestRequest.TRAIT_UNKNOWN_DIR and target_reached:
         rospy.loginfo("Followed path to node with no unexplored dir. Returning home.")
         speak_pub.publish("Going home")
         follow_graph_trait = NextNodeOfInterestRequest.TRAIT_START
-
-    update_unexplored_edges(n, e, s, ObstacleHandler.west_blocked())
+        node_detected[0] = True
+        
 
 def update_unexplored_edges(n, e, s, w):
-    response = place_node_service.call(PlaceNodeRequest(current_node.id_this, compass_direction, n, e, s, w, False, -1, 0, 0))
+    try:
+        response = place_node_service.call(PlaceNodeRequest(current_node.id_this, compass_direction, n, e, s, w, False, 0, 0, 0))
+    except:
+        rospy.logerr("Failed to place node in Update unexplored edges ------------------------")
     
 
 def get_angle_to(map_dir):
@@ -279,13 +287,16 @@ def place_node(object_here):
     e = ObstacleHandler.east_blocked()
     s = ObstacleHandler.south_blocked()
     w = ObstacleHandler.west_blocked()
-    response = place_node_service.call(PlaceNodeRequest(current_node.id_this, compass_direction, n, e, s, w, object_here, detected_object.type, detected_object.x, detected_object.y))
+    try:
+        response = place_node_service.call(PlaceNodeRequest(current_node.id_this, compass_direction, n, e, s, w, object_here, detected_object.type, detected_object.x, detected_object.y))
 
-    if response.generated_node.id_this != current_node.id_this:
-        rospy.loginfo("Placed node with id: %d, object: %s.", response.generated_node.id_this, str(response.generated_node.object_here))
-        if not object_here:
-            current_node = response.generated_node
-            walls_have_changed = False
+        if response.generated_node.id_this != current_node.id_this:
+            rospy.loginfo("Placed node with id: %d, object: %s.", response.generated_node.id_this, str(response.generated_node.object_here))
+            if not object_here:
+                current_node = response.generated_node
+                walls_have_changed = False
+    except:
+        pass
 
 def reset_node_detected():
     global node_detected
@@ -410,11 +421,12 @@ def on_node_callback(node):
         if node.object_here and speak_on_object:
             fetch_string = "I have fetched" + OBJECTS[node.object_type]
             rospy.loginfo("%s (%d).", fetch_string, node.object_type)
-            speak_pub.publish(fetch_string)
+            speak_pub.publish(fetch_string)        
 
 def goto_done_callback(success):
-    global goto_done
-    goto_done[0] = success
+    global goto_done, target_reached
+    goto_done[0] = True
+    target_reached = success.data
     rospy.loginfo("Goto callback. Success: %s.", str(success))
 
 def odometry_callback(data):
@@ -504,6 +516,7 @@ def main(argv):
         e = ObstacleHandler.east_blocked()
         s = ObstacleHandler.south_blocked()
         w = True
+        
         response = place_node_service.call(PlaceNodeRequest(-1, Node.EAST, n, e, s, w, False, -1, -1, -1))
         current_node = response.generated_node
 

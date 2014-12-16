@@ -8,9 +8,9 @@ const double Mapping::MAP_WIDTH = 10.0;
 const double Mapping::MAP_X_OFFSET = MAP_WIDTH/2.0;
 const double Mapping::MAP_Y_OFFSET = MAP_HEIGHT/2.0;
 
-const double Mapping::P_PRIOR = log(0.5);
-const double Mapping::P_OCC = log(0.9); //log(0.7);
-const double Mapping::P_FREE  = log(0.4);//log(0.35);
+const double Mapping::P_PRIOR = log(0.5/(1.0-0.5));
+const double Mapping::P_OCC = log(0.7/(1.0-0.7)); 
+const double Mapping::P_FREE  = log(0.35/(1.0 - 0.35));
 
 const double Mapping::FREE_OCCUPIED_THRESHOLD = log(0.5);
 
@@ -46,7 +46,7 @@ Mapping::Mapping() :
     distance_sub = handle.subscribe("/perception/ir/distance", 1, &Mapping::distanceCallback, this);
     odometry_sub = handle.subscribe("/pose/odometry/", 1, &Mapping::odometryCallback, this);
     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
-    active_sub = handle.subscribe("mapping/active", 1, &Mapping::activateUpdateCallback, this);
+    active_sub = handle.subscribe("/mapping/active", 1, &Mapping::activateUpdateCallback, this);
     map_save = handle.subscribe("/save", 5, &Mapping::saveMapCallback, this);
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
     seen_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/seen_grid",1);

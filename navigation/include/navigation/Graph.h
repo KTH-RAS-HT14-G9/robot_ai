@@ -188,6 +188,7 @@ bool Graph::on_node_auto_recover(float x, float y, navigation_msgs::PlaceNodeReq
     if (request.id_previous == -1) return false;
 
     if (!on_node(x,y, _merge_thresh(), node)) {
+
         //check if there is a free edge at the previous id
         if (is_free_connection(request.id_previous, request.direction))
             return false;
@@ -209,15 +210,16 @@ bool Graph::on_node_auto_recover(float x, float y, navigation_msgs::PlaceNodeReq
 
 void Graph::update_blocked_edges(navigation_msgs::Node& node, navigation_msgs::PlaceNodeRequest& request)
 {
-    if (node.edges[North] <= NAV_GRAPH_UNKNOWN) node.edges[North] = request.east_blocked;
-    if (node.edges[East] <= NAV_GRAPH_UNKNOWN) node.edges[East] = request.east_blocked;
-    if (node.edges[South] <= NAV_GRAPH_UNKNOWN) node.edges[South] = request.east_blocked;
-    if (node.edges[West] <= NAV_GRAPH_UNKNOWN) node.edges[West] = request.east_blocked;
+    if (node.edges[North] == -1) node.edges[North] = request.north_blocked ? NAV_GRAPH_BLOCKED : NAV_GRAPH_UNKNOWN;
+    if (node.edges[East] == -1) node.edges[East] = request.east_blocked ? NAV_GRAPH_BLOCKED : NAV_GRAPH_UNKNOWN;
+    if (node.edges[South] == -1) node.edges[South] = request.south_blocked ? NAV_GRAPH_BLOCKED : NAV_GRAPH_UNKNOWN;
+    if (node.edges[West] == -1) node.edges[West] = request.west_blocked ? NAV_GRAPH_BLOCKED : NAV_GRAPH_UNKNOWN;
 }
 
 navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::PlaceNodeRequest &request)
 {
     navigation_msgs::Node node;
+//    ROS_ERROR("[Graph::place_node] Placing node");
 
     //only place node, if there is no other node close nearby
     if (!on_node_auto_recover(x,y,request,node)) {
@@ -232,8 +234,8 @@ navigation_msgs::Node& Graph::place_node(float x, float y, navigation_msgs::Plac
         _nodes.push_back(node);
     }
     else {
-        ROS_INFO("On node %d", node.id_this);
-        update_blocked_edges(node, request);
+//        ROS_ERROR("On node %d. Updating blocked edges", node.id_this);
+        update_blocked_edges(_nodes[node.id_this], request);
         update_position(_nodes[node.id_this].x, _nodes[node.id_this].y, x, y);
     }
 
@@ -315,7 +317,7 @@ int Graph::get_closest_node(float x, float y, bool consider_obj, double& min_dis
 
 bool Graph::on_object_node(float x, float y, navigation_msgs::Node& node)
 {
-    double sq_dist_thresh = _merge_thresh();
+    double sq_dist_thresh = _dist_thresh();
     sq_dist_thresh *= sq_dist_thresh;
 
     double min_dist;
@@ -408,6 +410,11 @@ void Graph::path_to_node(int id_from, int id_to, std::vector<int> &path, double&
     is_target_node.resize(_nodes.size());
     is_target_node[id_to] = true;
 
+//    std::cout << "From " << id_from << " to " << id_to << " Filter: ";
+//    for(int i = 0; i < is_target_node.size(); ++i)
+//        std::cout << "i = " << i << ": " << is_target_node[i] << ", ";
+//    std::cout << std::endl;
+
     path_to_poi(id_from, is_target_node, path, dist);
 }
 
@@ -445,6 +452,10 @@ void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vecto
         navigation_msgs::Node& node = _nodes[id];
         for(int i = 0; i < node.edges.size(); ++i)
         {
+            if (i==Object) {
+                int a = 5;
+                a*=3;
+            }
             if (node.edges[i] >= 0) {
                 if(update_dijkstra(id, node.edges[i], _nodes, previous, distances))
                     queue.push(node.edges[i]);
@@ -458,6 +469,7 @@ void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vecto
     float min_dist = std::numeric_limits<float>::infinity();
 
     for (int i = 0; i < _nodes.size(); ++i) {
+//        std::cout << i << ": " << filter[i] << ", dist: " << distances[i] << std::endl;
         if (filter[i] && distances[i] < min_dist) {
             min_dist = distances[i];
             i_min_dist = i;
@@ -465,7 +477,7 @@ void Graph::path_to_poi(int id_from, const std::vector<bool> &filter, std::vecto
     }
 
     //no node to reach
-    if (i_min_dist) {
+    if (i_min_dist == -1) {
         path.push_back(id_from);
         return;
     }

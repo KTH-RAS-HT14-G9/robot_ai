@@ -152,7 +152,7 @@ void generate_all_permutations( std::vector<int>& object_nodes,std::vector<std::
 
 std::vector<int> tsp_traverse_all_objects()
 {
-    
+
     std::vector<int> object_nodes;
     std::vector<int> best_path;
     std::vector<int> best_objects;
@@ -184,14 +184,14 @@ std::vector<int> tsp_traverse_all_objects()
         for (int j=0; j<object_nodes.size();++j)
         {
             _graph.path_to_node(perm[i][j], perm[i][j+1], _path.path,dist);
-            std::cout<<"from "<<perm[i][j]<<"to "<<perm[i][j+1]<<" dist"<<dist<<std::endl;
+            //std::cout<<"from "<<perm[i][j]<<"to "<<perm[i][j+1]<<" dist"<<dist<<std::endl;
             dist_sum=dist_sum+dist;
         }
         
         _graph.path_to_node(perm[i][object_nodes.size()-1], perm[i][0], _path.path,dist); // for the last object to the strating point
-        std::cout<<"going back dis  "<<dist<< std::endl;
+        //std::cout<<"going back dis  "<<dist<< std::endl;
         dist_sum=dist_sum+dist;
-        std::cout<<dist_sum<<std::endl;
+        //std::cout<<dist_sum<<std::endl;
         if (dist_sum<shortest)
         {
             best_id=i;
@@ -208,17 +208,20 @@ std::vector<int> tsp_traverse_all_objects()
         best_objects.push_back(perm[best_id][i]);
     }
     best_objects.push_back(_graph.get_node(0).id_this);
-    
+
+    best_path.clear();
     for (int i=0; i<best_objects.size()-1;++i)
     {
         std::vector <int > nodes_between;
         _graph.path_to_node(best_objects[i], best_objects[i+1], nodes_between,dist);
+//        std::cout << best_objects[i] << " - (" << nodes_between.size() << ") -> " << best_objects[i+1] << ", ";
         for (int j=0; j<nodes_between.size()-1;++j)
         {
             best_path.push_back(nodes_between[j]);
         }
     }
-    best_path.push_back(_graph.get_node(0).id_this);
+    best_path.push_back(0);
+//    std::cout << " || -> 0" << std::endl;
     return best_path;
     
 }
@@ -526,8 +529,8 @@ int main(int argc, char **argv)
    ///////test
 //   std::vector<Point> test_points;
 //   test2_graph_build(test_points);
-   //std::vector<int> best_path;
-   //std::cout<<"banana"<<std::endl;
+//   std::vector<int> best_path;
+//   std::cout<<"banana"<<std::endl;
 //    bool save = true;
 
     while(n.ok())
@@ -537,7 +540,7 @@ int main(int argc, char **argv)
         float x = _position.x;
         float y = _position.y;
 
-        if (_graph.on_node(x,y, node)) {
+        if (_graph.on_node(x,y, node) || _graph.on_object_node(x,y, node)) {
             _pub_on_node.publish(node);
             _graph_viz->highlight_node(node.id_this,true);
         }
@@ -550,13 +553,13 @@ int main(int argc, char **argv)
 //            save = false;
 //        }
 
-       //if (_test2_i >= test_points.size()) {
-       //     best_path=tsp_traverse_all_objects();
-       //      for (int i=0; i<best_path.size();++i){
-       //      std::cout<<best_path[i]<< "->"<<std::endl;
-       //     }
+//       if (_test2_i >= test_points.size()) {
+//            best_path=tsp_traverse_all_objects();
+//             for (int i=0; i<best_path.size();++i){
+//             std::cout<<best_path[i]<< "->"<<std::endl;
+//            }
 
-       // }
+//        }
 
         ros::spinOnce();
         rate.sleep();
