@@ -46,7 +46,7 @@ Mapping::Mapping() :
     distance_sub = handle.subscribe("/perception/ir/distance", 1, &Mapping::distanceCallback, this);
     odometry_sub = handle.subscribe("/pose/odometry/", 1, &Mapping::odometryCallback, this);
     wall_sub = handle.subscribe("/vision/obstacles/planes", 1, &Mapping::wallDetectedCallback, this);
-    active_sub = handle.subscribe("mapping/active", 1, &Mapping::activateUpdateCallback, this);
+    active_sub = handle.subscribe("/mapping/active", 1, &Mapping::activateUpdateCallback, this);
     map_save = handle.subscribe("/save", 5, &Mapping::saveMapCallback, this);
     map_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/occupancy_grid", 1);
     seen_pub = handle.advertise<nav_msgs::OccupancyGrid>("/mapping/seen_grid",1);

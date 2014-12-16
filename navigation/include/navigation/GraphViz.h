@@ -148,7 +148,7 @@ void GraphViz::draw_node(int id, bool highlight)
                 dx = 0; dy = 0;
             }
 
-            if (node.edges[i] == NAV_GRAPH_UNKNOWN)
+            if (node.edges[i] <= NAV_GRAPH_UNKNOWN)
             {
                 double s = 0.2;
                 marker_id.edges[i] = _marker.add_line(node.x,node.y, node.x+s*dx, node.y+s*dy, line_z, thickness, color_unknown.r, color_unknown.g, color_unknown.b, marker_id.edges[i]);

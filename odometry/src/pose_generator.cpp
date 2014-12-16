@@ -21,7 +21,7 @@
 
 Parameter<int> _max_iterations("/pose/odometry/num_correction_iterations",5);
 Parameter<bool> _enable_lateral_correction("/pose/odometry/correction/lateral_enabled",false);
-Parameter<bool> _enable_theta_correction("/pose/odometry/correction/theta_enabled",true);
+Parameter<bool> _enable_theta_correction("/pose/odometry/correction/theta_enabled",false);
 Parameter<int> _revert_last_msec("/pose/odometry/revert_last_msec",100);
 
 ros::NodeHandlePtr _handle;

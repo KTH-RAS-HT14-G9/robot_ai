@@ -6,9 +6,12 @@
 	<node pkg="ras_espeak" type="espeak_node" name="espeak_node" />
 
 	<include file="$(find controllers_launch)/launch/controllers.launch" />
-	<!--<include file="$(find vision_launch)/launch/vision.launch" />-->
+	<include file="$(find vision_launch)/launch/vision.launch" />
 	<include file="$(find robot_ai_launch)/launch/ai.launch">	
 		<arg name="phase" value="$(arg phase)" />
 	</include>
+
+	<node pkg="rosbag" type="record" name="evidence" args="record -O ./dd2425_ht14_G9_phase1 /evidence" />
+	<node pkg="rosbag" type="record" name="graph_bag" args="record -O ./graph.save.bag /graph/save" />
 
 </launch>
